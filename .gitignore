@@ -49,7 +49,6 @@ backup/
 *.dump
 *.bak
 
-
 # === ENVIRONMENT VARIABLES ===
 .env
 .env.local
