@@ -1,46 +1,55 @@
-name: Auto deploy to server
+name: Deploy FLARE
 
 on:
   push:
     branches:
-      - main
+      - alpha3
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy backend via SSH
+      - name: Deploy to server via SSH
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          port: 22
+          timeout: 30s
+          command_timeout: 15m
           script: |
             set -e
 
-            echo "🚀 Start deploy"
+            echo "🚀 START DEPLOY"
 
+            echo "📦 UPDATE CODE"
             cd /var/www/shkila
-
-            echo "📦 Update code"
             git fetch origin
-            git reset --hard origin/main
+            git reset --hard origin/alpha3
 
-            echo "🐍 Activate venv"
+            echo "🐍 BACKEND"
             source venv/bin/activate
-
-            echo "📚 Install requirements"
-            pip install -r requirements.txt
-
-            echo "🗄️ Django migrate"
             cd back/school
+
+            pip install -r ../../requirements.txt
             python manage.py migrate
+            python manage.py collectstatic --noinput
 
-            echo "🧹 Collect static"
-            python manage.py collectstatic --noinput --clear
-
-            echo "🔁 Restart service"
             systemctl restart shkila
 
-            echo "✅ Deploy finished"
+            echo "🎨 FRONTEND"
+            cd /var/www/shkila/front
+            npm install
+            npm run build
+
+            rm -rf /var/www/frontend/*
+            cp -r dist/* /var/www/frontend/
+
+            chown -R www-data:www-data /var/www/frontend
+            chmod -R 755 /var/www/frontend
+
+            systemctl reload nginx
+
+            echo "✅ DEPLOY FINISHED"
