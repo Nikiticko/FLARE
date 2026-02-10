@@ -24,12 +24,10 @@ jobs:
 
             echo "🚀 START DEPLOY"
 
-            echo "📦 UPDATE CODE"
             cd /var/www/shkila
             git fetch origin
             git reset --hard origin/main
 
-            echo "🐍 BACKEND"
             source venv/bin/activate
             cd back/school
 
@@ -39,7 +37,6 @@ jobs:
 
             systemctl restart shkila
 
-            echo "🎨 FRONTEND"
             cd /var/www/shkila/front
             npm install
             npm run build
