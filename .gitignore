@@ -42,7 +42,6 @@ db.sqlite3-journal
 /static/
 staticfiles/
 
-
 # === DATABASE BACKUPS ===
 *.sql
 backup*.sql
