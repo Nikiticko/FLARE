@@ -301,6 +301,42 @@ class AdminLessonUpdateAPI(generics.UpdateAPIView):
     serializer_class = AdminLessonUpdateSerializer
     queryset = Lesson.objects.select_related("student", "teacher").all()
     http_method_names = ["patch", "options", "head"]
+    
+    def get_serializer_class(self):
+        # Для ответа используем полный сериализатор
+        if self.request.method in ['PATCH', 'PUT']:
+            return AdminLessonUpdateSerializer
+        return LessonSerializer
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[Admin] Updating lesson ID: {instance.id}")
+        logger.info(f"[Admin] Request data: {request.data}")
+        
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Возвращаем полные данные обновленного урока
+        if getattr(instance, '_prefetched_objects_cache', None):
+            instance._prefetched_objects_cache = {}
+        
+        # Обновляем объект из БД
+        instance.refresh_from_db()
+        
+        # Используем полный сериализатор для ответа
+        from rest_framework.response import Response
+        response_serializer = LessonSerializer(instance)
+        response_data = response_serializer.data
+        
+        logger.info(f"[Admin] Response data ID: {response_data.get('id')}")
+        logger.info(f"[Admin] Response data keys: {list(response_data.keys())}")
+        
+        return Response(response_data)
 
     def perform_update(self, serializer):
         lesson = serializer.save()
