@@ -3,7 +3,7 @@ name: Deploy FLARE
 on:
   push:
     branches:
-      - alpha3
+      - main
 
 jobs:
   deploy:
@@ -27,7 +27,7 @@ jobs:
             echo "📦 UPDATE CODE"
             cd /var/www/shkila
             git fetch origin
-            git reset --hard origin/alpha3
+            git reset --hard origin/main
 
             echo "🐍 BACKEND"
             source venv/bin/activate
