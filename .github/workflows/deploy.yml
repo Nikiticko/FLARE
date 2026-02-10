@@ -1,0 +1,46 @@
+name: Auto deploy to server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy backend via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            set -e
+
+            echo "🚀 Start deploy"
+
+            cd /var/www/shkila
+
+            echo "📦 Update code"
+            git fetch origin
+            git reset --hard origin/main
+
+            echo "🐍 Activate venv"
+            source venv/bin/activate
+
+            echo "📚 Install requirements"
+            pip install -r requirements.txt
+
+            echo "🗄️ Django migrate"
+            cd back/school
+            python manage.py migrate
+
+            echo "🧹 Collect static"
+            python manage.py collectstatic --noinput --clear
+
+            echo "🔁 Restart service"
+            systemctl restart shkila
+
+            echo "✅ Deploy finished"
