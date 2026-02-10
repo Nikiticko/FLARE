@@ -143,7 +143,7 @@ class ManagerLessonsListCreateAPI(generics.ListCreateAPIView):
         return ManagerLessonSerializer
 
     def get_queryset(self):
-        return Lesson.objects.select_related("student", "teacher", "course").all().order_by(
+        return Lesson.objects.select_related("student", "teacher").all().order_by(
             "-created_at"
         )
 
@@ -179,7 +179,7 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
     """
     permission_classes = [IsManagerOrAdmin]
     serializer_class = ManagerLessonUpdateSerializer
-    queryset = Lesson.objects.select_related("student", "teacher", "course").all()
+    queryset = Lesson.objects.select_related("student", "teacher").all()
     http_method_names = ["patch", "options", "head"]
     
     def get_serializer_class(self):
@@ -219,12 +219,15 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
         
         # ЛОГИКА УПРАВЛЕНИЯ БАЛАНСОМ (аналогично учителю)
         with transaction.atomic():
+            # ВРЕМЕННО: is_trial всегда False до применения миграций
+            is_trial = getattr(lesson, 'is_trial', False)
+            
             # Если статус изменился на DONE (завершено)
             if status_changed and new_status == Lesson.STATUS_DONE:
                 # Списываем баланс только если:
                 # 1. Это НЕ пробное занятие
                 # 2. Баланс еще не был списан
-                if not lesson.is_trial and not lesson.debited_from_balance:
+                if not is_trial and not lesson.debited_from_balance:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -239,7 +242,7 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
                 # Возвращаем баланс только если:
                 # 1. Это НЕ пробное занятие
                 # 2. Баланс был списан ранее
-                if not lesson.is_trial and old_debited:
+                if not is_trial and old_debited:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -251,7 +254,7 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
             # Если статус изменился с DONE на другой
             elif status_changed and old_status == Lesson.STATUS_DONE and new_status != Lesson.STATUS_DONE:
                 # Возвращаем баланс, если он был списан
-                if not lesson.is_trial and old_debited:
+                if not is_trial and old_debited:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -347,7 +350,7 @@ class ManagerLessonDebitAPI(APIView):
             return Response({"detail": "lesson not found"}, status=404)
 
         # Пробные занятия не списываются с баланса
-        if les.is_trial:
+        if getattr(les, 'is_trial', False):
             return Response({"detail": "trial lessons cannot be debited"}, status=400)
 
         if les.debited_from_balance:

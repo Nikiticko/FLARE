@@ -43,14 +43,16 @@ class UnifiedDashboardSerializer(serializers.Serializer):
 class StudentCourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
-        fields = ("id", "title", "description", "default_lessons", "default_price")
+        fields = ("id", "title", "description")
 
 
 class StudentLessonSerializer(serializers.ModelSerializer):
     teacher_email = serializers.EmailField(source="teacher.email", read_only=True)
     teacher_full_name = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
-    feedback = serializers.SerializerMethodField()
+    
+    # Явно объявляем поле из модели для чтения
+    feedback = serializers.CharField(required=False, allow_blank=True, read_only=True)
 
     class Meta:
         model = Lesson
@@ -85,13 +87,10 @@ class StudentLessonSerializer(serializers.ModelSerializer):
     
     def get_course(self, obj):
         """Получение названия курса"""
-        if obj.course:
-            return obj.course.title
+        course = getattr(obj, 'course', None)
+        if course:
+            return course.title
         return None
-    
-    def get_feedback(self, obj):
-        """Безопасное получение обратной связи"""
-        return getattr(obj, 'feedback', '')
 
 
 class StudentBalanceSerializer(serializers.ModelSerializer):

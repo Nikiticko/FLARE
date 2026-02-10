@@ -53,7 +53,7 @@ class TeacherLessonsListCreateAPI(generics.ListCreateAPIView):
         from django.utils import timezone
         
         user = self.request.user
-        qs = Lesson.objects.select_related("student", "teacher", "course").all()
+        qs = Lesson.objects.select_related("student", "teacher").all()
         # если не админ и не суперюзер — показываем только свои уроки
         if not (user.is_superuser or getattr(user, "role", None) == "ADMIN"):
             qs = qs.filter(teacher=user)
@@ -119,7 +119,7 @@ class TeacherLessonDetailAPI(generics.RetrieveAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Lesson.objects.select_related("student", "teacher", "course").all()
+        qs = Lesson.objects.select_related("student", "teacher").all()
         if not (user.is_superuser or getattr(user, "role", None) == "ADMIN"):
             qs = qs.filter(teacher=user)
         return qs
@@ -140,7 +140,7 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
 
     def get_queryset(self):
         user = self.request.user
-        qs = Lesson.objects.select_related("student", "teacher", "course").all()
+        qs = Lesson.objects.select_related("student", "teacher").all()
         if not (user.is_superuser or getattr(user, "role", None) == "ADMIN"):
             qs = qs.filter(teacher=user)
         return qs
@@ -154,6 +154,12 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Updating lesson ID: {instance.id}")
+        logger.info(f"Request data: {request.data}")
+        
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
         self.perform_update(serializer)
@@ -167,7 +173,14 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
         
         # Используем полный сериализатор для ответа
         response_serializer = TeacherLessonSerializer(instance)
-        return Response(response_serializer.data)
+        response_data = response_serializer.data
+        
+        logger.info(f"Response data ID: {response_data.get('id')}")
+        logger.info(f"Response data keys: {list(response_data.keys())}")
+        logger.info(f"Response feedback: {response_data.get('feedback')}")
+        logger.info(f"Response cancellation_reason: {response_data.get('cancellation_reason')}")
+        
+        return Response(response_data)
 
     def perform_update(self, serializer):
         old_status = self.get_object().status
@@ -181,12 +194,15 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
         
         # ЛОГИКА УПРАВЛЕНИЯ БАЛАНСОМ
         with transaction.atomic():
+            # ВРЕМЕННО: is_trial всегда False до применения миграций
+            is_trial = getattr(lesson, 'is_trial', False)
+            
             # Если статус изменился на DONE (завершено)
             if status_changed and new_status == Lesson.STATUS_DONE:
                 # Списываем баланс только если:
                 # 1. Это НЕ пробное занятие
                 # 2. Баланс еще не был списан
-                if not lesson.is_trial and not lesson.debited_from_balance:
+                if not is_trial and not lesson.debited_from_balance:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -201,7 +217,7 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
                 # Возвращаем баланс только если:
                 # 1. Это НЕ пробное занятие
                 # 2. Баланс был списан ранее
-                if not lesson.is_trial and old_debited:
+                if not is_trial and old_debited:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -213,7 +229,7 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
             # Если статус изменился с DONE на другой (например, обратно на PLANNED)
             elif status_changed and old_status == Lesson.STATUS_DONE and new_status != Lesson.STATUS_DONE:
                 # Возвращаем баланс, если он был списан
-                if not lesson.is_trial and old_debited:
+                if not is_trial and old_debited:
                     lb, _ = LessonBalance.objects.select_for_update().get_or_create(
                         student=lesson.student
                     )
@@ -239,7 +255,7 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
                 "student": lesson.student_id,
                 "status": lesson.status,
                 "old_status": old_status,
-                "is_trial": lesson.is_trial,
+                "is_trial": getattr(lesson, 'is_trial', False),
                 "debited_from_balance": lesson.debited_from_balance,
                 "cancellation_reason": getattr(lesson, 'cancellation_reason', None) if lesson.status == Lesson.STATUS_CANCELLED else None,
                 "has_feedback": bool(getattr(lesson, 'feedback', '')) if lesson.status == Lesson.STATUS_DONE else None,
@@ -290,7 +306,7 @@ class TeacherStudentLessonsAPI(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         student_id = self.kwargs["student_id"]
-        qs = Lesson.objects.select_related("student", "teacher", "course").filter(
+        qs = Lesson.objects.select_related("student", "teacher").filter(
             student_id=student_id
         )
         if not (user.is_superuser or getattr(user, "role", None) == "ADMIN"):

@@ -117,7 +117,7 @@ class StudentLessonsListAPI(generics.ListAPIView):
     ordering = ["scheduled_at"]
 
     def get_queryset(self):
-        return Lesson.objects.select_related("teacher", "course").filter(student=self.request.user)
+        return Lesson.objects.select_related("teacher").filter(student=self.request.user)
 
 
 # ===== BALANCE =====

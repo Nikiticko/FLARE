@@ -17,9 +17,11 @@ class TeacherLessonSerializer(serializers.ModelSerializer):
     # Используем SerializerMethodField для полей, которые могут отсутствовать в БД
     course = serializers.SerializerMethodField()
     course_id = serializers.SerializerMethodField()
-    cancellation_reason = serializers.SerializerMethodField()
-    feedback = serializers.SerializerMethodField()
     student_balance = serializers.SerializerMethodField()
+    
+    # Явно объявляем поля из модели для чтения/записи
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Lesson
@@ -44,21 +46,14 @@ class TeacherLessonSerializer(serializers.ModelSerializer):
     
     def get_course(self, obj):
         """Получение названия курса"""
-        if obj.course:
-            return obj.course.title
+        course = getattr(obj, 'course', None)
+        if course:
+            return course.title
         return None
     
     def get_course_id(self, obj):
         """ID курса для подстановки при создании/редактировании"""
-        return obj.course_id if obj.course_id else None
-    
-    def get_cancellation_reason(self, obj):
-        """Безопасное получение причины отмены"""
-        return getattr(obj, 'cancellation_reason', '')
-    
-    def get_feedback(self, obj):
-        """Безопасное получение обратной связи"""
-        return getattr(obj, 'feedback', '')
+        return getattr(obj, 'course_id', None)
     
     def get_student_balance(self, obj):
         """Получение баланса ученика"""
@@ -77,14 +72,15 @@ class TeacherLessonUpdateSerializer(serializers.ModelSerializer):
     - причину отмены (обязательна при статусе CANCELLED)
     - обратную связь (обязательна при статусе DONE)
     - ссылку (обязательна; пустое значение — Discord по умолчанию)
-    - курс (становится курсом по умолчанию для ученика)
     """
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
     link = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
     
     class Meta:
         model = Lesson
-        fields = ("status", "comment", "link", "cancellation_reason", "feedback", "course")
+        fields = ("status", "comment", "link", "course", "cancellation_reason", "feedback")
 
     def validate_link(self, value):
         """Пустая ссылка заменяется на Discord по умолчанию"""
@@ -98,54 +94,27 @@ class TeacherLessonUpdateSerializer(serializers.ModelSerializer):
         return super().save(**kwargs)
 
     def validate(self, attrs):
-        # Получаем текущий статус (новый или существующий)
-        new_status = attrs.get('status')
-        old_status = self.instance.status if self.instance else None
+        """
+        Валидация полей в зависимости от статуса:
+        - При статусе CANCELLED требуется cancellation_reason
+        - При статусе DONE требуется feedback
+        """
+        status = attrs.get('status')
         
-        # Определяем финальный статус
-        final_status = new_status if new_status is not None else old_status
-        
-        # Проверяем, меняется ли статус
-        status_changed = new_status is not None and new_status != old_status
-        
-        # Получаем причину отмены (новую или существующую) - безопасно через getattr
-        cancellation_reason = attrs.get('cancellation_reason')
-        if cancellation_reason is None:
-            if self.instance:
-                cancellation_reason = getattr(self.instance, 'cancellation_reason', '') or ''
-            else:
-                cancellation_reason = ''
-        # Если передана пустая строка, сохраняем её (позволяет очистить поле)
-        elif cancellation_reason == '':
-            cancellation_reason = ''
-        # Обновляем attrs с актуальным значением
-        attrs['cancellation_reason'] = cancellation_reason
-        
-        # Получаем обратную связь (новую или существующую) - безопасно через getattr
-        feedback = attrs.get('feedback')
-        if feedback is None:
-            if self.instance:
-                feedback = getattr(self.instance, 'feedback', '') or ''
-            else:
-                feedback = ''
-        # Если передана пустая строка, сохраняем её (позволяет очистить поле)
-        elif feedback == '':
-            feedback = ''
-        # Обновляем attrs с актуальным значением
-        attrs['feedback'] = feedback
-        
-        # Если статус меняется на CANCELLED, нужна причина отмены
-        if status_changed and final_status == Lesson.STATUS_CANCELLED:
-            if not cancellation_reason or not cancellation_reason.strip():
+        # Если статус изменен на CANCELLED, проверяем наличие причины
+        if status == Lesson.STATUS_CANCELLED:
+            cancellation_reason = attrs.get('cancellation_reason', '').strip()
+            if not cancellation_reason:
                 raise serializers.ValidationError({
-                    "cancellation_reason": "Причина отмены обязательна при отмене занятия"
+                    "cancellation_reason": "Причина отмены обязательна при статусе CANCELLED"
                 })
         
-        # Если статус меняется на DONE, нужна обратная связь
-        if status_changed and final_status == Lesson.STATUS_DONE:
-            if not feedback or not feedback.strip():
+        # Если статус изменен на DONE, проверяем наличие обратной связи
+        if status == Lesson.STATUS_DONE:
+            feedback = attrs.get('feedback', '').strip()
+            if not feedback:
                 raise serializers.ValidationError({
-                    "feedback": "Обратная связь обязательна при завершении занятия"
+                    "feedback": "Обратная связь обязательна при статусе DONE"
                 })
         
         return attrs
@@ -159,14 +128,15 @@ class TeacherLessonCreateSerializer(serializers.ModelSerializer):
     """
     student_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     student = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False)
-    course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
+    # ВРЕМЕННО УБРАНО: course будет доступен после применения миграций
+    # course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
     link = serializers.CharField(required=False, allow_blank=True, default="Discord", max_length=300)
     comment = serializers.CharField(required=False, allow_blank=True)
     scheduled_at = serializers.DateTimeField(required=True)
 
     class Meta:
         model = Lesson
-        fields = ("student", "student_email", "course", "scheduled_at", "link", "comment")
+        fields = ("student", "student_email", "scheduled_at", "link", "comment")
 
     def validate_link(self, value):
         """Пустая ссылка заменяется на Discord по умолчанию"""

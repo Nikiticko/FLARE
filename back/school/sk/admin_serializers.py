@@ -82,6 +82,10 @@ class LessonSerializer(serializers.ModelSerializer):
     student_balance = serializers.SerializerMethodField()
     course = serializers.SerializerMethodField()
     course_id = serializers.SerializerMethodField()
+    
+    # Явно объявляем поля из модели для чтения/записи
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Lesson
@@ -99,6 +103,8 @@ class LessonSerializer(serializers.ModelSerializer):
             "scheduled_at",
             "status",
             "comment",
+            "cancellation_reason",
+            "feedback",
             "debited_from_balance",
             "is_trial",
             "created_at",
@@ -106,13 +112,14 @@ class LessonSerializer(serializers.ModelSerializer):
     
     def get_course(self, obj):
         """Получение названия курса"""
-        if obj.course:
-            return obj.course.title
+        course = getattr(obj, 'course', None)
+        if course:
+            return course.title
         return None
     
     def get_course_id(self, obj):
         """ID курса для подстановки при создании/редактировании"""
-        return obj.course_id if obj.course_id else None
+        return getattr(obj, 'course_id', None)
     
     def get_student_balance(self, obj):
         """Получение баланса ученика"""
@@ -178,31 +185,23 @@ class AdminLessonCreateSerializer(serializers.ModelSerializer):
         if not attrs.get('teacher'):
             raise serializers.ValidationError({"teacher": "Either teacher or teacher_email is required"})
         
-        # Валидация баланса и пробных занятий (аналогично менеджеру)
-        is_trial = attrs.get('is_trial', False)
+        # ВРЕМЕННО УБРАНА валидация is_trial до применения миграций
+        # Просто проверяем баланс
         student = attrs.get('student')
-        
         if student:
             from .models import LessonBalance
             student_role = getattr(student, 'role', None)
             lb, _ = LessonBalance.objects.get_or_create(student=student)
             
-            if is_trial:
-                # Пробные занятия можно создавать для абитуриентов или учеников с нулевым балансом
-                if student_role == 'STUDENT' and lb.lessons_available > 0:
-                    raise serializers.ValidationError({
-                        "is_trial": "Пробные занятия можно создавать только для абитуриентов или учеников с нулевым балансом"
-                    })
-            else:
-                # Обычные занятия можно создавать только для учеников с положительным балансом
-                if student_role != 'STUDENT':
-                    raise serializers.ValidationError({
-                        "student": "Обычные занятия можно создавать только для учеников. Для абитуриентов создайте пробное занятие (is_trial=true)."
-                    })
-                if lb.lessons_available <= 0:
-                    raise serializers.ValidationError({
-                        "student": "Нельзя создать урок для ученика с нулевым балансом. Создайте пробное занятие (is_trial=true) или пополните баланс ученика."
-                    })
+            # Обычные занятия можно создавать только для учеников с положительным балансом
+            if student_role != 'STUDENT':
+                raise serializers.ValidationError({
+                    "student": "Обычные занятия можно создавать только для учеников."
+                })
+            if lb.lessons_available <= 0:
+                raise serializers.ValidationError({
+                    "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика."
+                })
         
         return attrs
 
@@ -210,17 +209,19 @@ class AdminLessonCreateSerializer(serializers.ModelSerializer):
 class AdminLessonUpdateSerializer(serializers.ModelSerializer):
     """
     Обновление урока админом.
-    Может менять время, ссылку, статус, комментарий, преподавателя, курс.
+    Может менять время, ссылку, статус, комментарий, преподавателя.
     Ссылка обязательна; пустое значение заменяется на Discord.
     """
     teacher_email = serializers.EmailField(write_only=True, required=False, allow_blank=True)
     teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
     link = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
     
     class Meta:
         model = Lesson
-        fields = ("scheduled_at", "status", "link", "comment", "teacher", "teacher_email", "course")
+        fields = ("scheduled_at", "status", "link", "comment", "teacher", "teacher_email", "course", "cancellation_reason", "feedback")
 
     def validate_link(self, value):
         """Пустая ссылка заменяется на Discord по умолчанию"""
@@ -257,12 +258,23 @@ class AuditLogSerializer(serializers.ModelSerializer):
 
 class CourseSerializer(serializers.ModelSerializer):
     """Сериализатор для курса (название и описание)"""
+    created_at = serializers.SerializerMethodField()
+    updated_at = serializers.SerializerMethodField()
+    
     class Meta:
         model = Course
         fields = (
             "id", "title", "description", "created_at", "updated_at"
         )
         read_only_fields = ("id", "created_at", "updated_at")
+    
+    def get_created_at(self, obj):
+        """Безопасное получение даты создания"""
+        return getattr(obj, 'created_at', None)
+    
+    def get_updated_at(self, obj):
+        """Безопасное получение даты обновления"""
+        return getattr(obj, 'updated_at', None)
 
 
 class CourseCreateUpdateSerializer(serializers.ModelSerializer):

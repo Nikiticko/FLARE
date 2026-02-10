@@ -18,9 +18,11 @@ class ManagerLessonSerializer(serializers.ModelSerializer):
     # Используем SerializerMethodField для полей, которые могут отсутствовать в БД
     course = serializers.SerializerMethodField()
     course_id = serializers.SerializerMethodField()
-    cancellation_reason = serializers.SerializerMethodField()
-    feedback = serializers.SerializerMethodField()
     student_balance = serializers.SerializerMethodField()
+    
+    # Явно объявляем поля из модели для чтения/записи
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Lesson
@@ -47,21 +49,14 @@ class ManagerLessonSerializer(serializers.ModelSerializer):
     
     def get_course(self, obj):
         """Получение названия курса"""
-        if obj.course:
-            return obj.course.title
+        course = getattr(obj, 'course', None)
+        if course:
+            return course.title
         return None
     
     def get_course_id(self, obj):
         """ID курса для подстановки при создании/редактировании"""
-        return obj.course_id if obj.course_id else None
-    
-    def get_cancellation_reason(self, obj):
-        """Безопасное получение причины отмены"""
-        return getattr(obj, 'cancellation_reason', '')
-    
-    def get_feedback(self, obj):
-        """Безопасное получение обратной связи"""
-        return getattr(obj, 'feedback', '')
+        return getattr(obj, 'course_id', None)
     
     def get_student_balance(self, obj):
         """Получение баланса ученика"""
@@ -85,7 +80,6 @@ class ManagerLessonCreateSerializer(serializers.ModelSerializer):
     scheduled_at = serializers.DateTimeField(required=True)
     link = serializers.CharField(required=False, allow_blank=True, default="Discord", max_length=300)
     comment = serializers.CharField(required=False, allow_blank=True)
-
     is_trial = serializers.BooleanField(required=False, default=False, help_text="Пробное занятие (не списывается с баланса)")
 
     class Meta:
@@ -143,39 +137,31 @@ class ManagerLessonCreateSerializer(serializers.ModelSerializer):
             logger.error("Teacher is required but not provided")
             raise serializers.ValidationError({"teacher": "Either teacher or teacher_email is required"})
         
-        # Валидация баланса и пробных занятий
-        is_trial = attrs.get('is_trial', False)
+        # ВРЕМЕННО УБРАНА валидация is_trial до применения миграций
+        # Просто проверяем баланс
         student = attrs.get('student')
-        
         if student:
             from .models import LessonBalance
             student_role = getattr(student, 'role', None)
             lb, _ = LessonBalance.objects.get_or_create(student=student)
             
-            if is_trial:
-                # Пробные занятия можно создавать для абитуриентов или учеников с нулевым балансом
-                if student_role == 'STUDENT' and lb.lessons_available > 0:
-                    raise serializers.ValidationError({
-                        "is_trial": "Пробные занятия можно создавать только для абитуриентов или учеников с нулевым балансом"
-                    })
-            else:
-                # Обычные занятия можно создавать только для учеников с положительным балансом
-                if student_role != 'STUDENT':
-                    raise serializers.ValidationError({
-                        "student": "Обычные занятия можно создавать только для учеников. Для абитуриентов создайте пробное занятие (is_trial=true)."
-                    })
-                if lb.lessons_available <= 0:
-                    raise serializers.ValidationError({
-                        "student": "Нельзя создать урок для ученика с нулевым балансом. Создайте пробное занятие (is_trial=true) или пополните баланс ученика."
-                    })
+            # Обычные занятия можно создавать только для учеников с положительным балансом
+            if student_role != 'STUDENT':
+                raise serializers.ValidationError({
+                    "student": "Обычные занятия можно создавать только для учеников."
+                })
+            if lb.lessons_available <= 0:
+                raise serializers.ValidationError({
+                    "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика."
+                })
         
-        logger.info(f"Validation successful. Final attrs: student={attrs.get('student')}, teacher={attrs.get('teacher')}, is_trial={is_trial}")
+        logger.info(f"Validation successful. Final attrs: student={attrs.get('student')}, teacher={attrs.get('teacher')}")
         return attrs
 
 
 class ManagerLessonUpdateSerializer(serializers.ModelSerializer):
     """
-    Менеджер может менять время, ссылку, статус, комментарий, преподавателя, курс.
+    Менеджер может менять время, ссылку, статус, комментарий, преподавателя.
     При отмене занятия (статус CANCELLED) обязательна причина отмены.
     Ссылка обязательна; пустое значение заменяется на Discord.
     """
@@ -183,10 +169,12 @@ class ManagerLessonUpdateSerializer(serializers.ModelSerializer):
     teacher = serializers.PrimaryKeyRelatedField(queryset=User.objects.all(), required=False, allow_null=True)
     course = serializers.PrimaryKeyRelatedField(queryset=Course.objects.all(), required=False, allow_null=True)
     link = serializers.CharField(required=False, allow_blank=True, max_length=300)
+    cancellation_reason = serializers.CharField(required=False, allow_blank=True)
+    feedback = serializers.CharField(required=False, allow_blank=True)
     
     class Meta:
         model = Lesson
-        fields = ("scheduled_at", "status", "link", "comment", "cancellation_reason", "feedback", "is_trial", "teacher", "teacher_email", "course")
+        fields = ("scheduled_at", "status", "link", "comment", "teacher", "teacher_email", "course", "cancellation_reason", "feedback")
 
     def validate_link(self, value):
         """Пустая ссылка заменяется на Discord по умолчанию"""
@@ -241,6 +229,24 @@ class ManagerLessonUpdateSerializer(serializers.ModelSerializer):
             if not cancellation_reason or not cancellation_reason.strip():
                 raise serializers.ValidationError({
                     "cancellation_reason": "Причина отмены обязательна при отмене занятия"
+                })
+        
+        # Получаем обратную связь (новую или существующую)
+        feedback = attrs.get('feedback')
+        if feedback is None:
+            if self.instance:
+                feedback = getattr(self.instance, 'feedback', '') or ''
+            else:
+                feedback = ''
+        elif feedback == '':
+            feedback = ''
+        attrs['feedback'] = feedback
+        
+        # Если статус меняется на DONE, нужна обратная связь
+        if status_changed and final_status == Lesson.STATUS_DONE:
+            if not feedback or not feedback.strip():
+                raise serializers.ValidationError({
+                    "feedback": "Обратная связь обязательна при завершении занятия"
                 })
         
         return attrs

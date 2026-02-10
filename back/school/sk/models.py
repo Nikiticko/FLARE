@@ -120,7 +120,6 @@ class Lesson(models.Model):
         default=False,
         help_text="True, если занятие уже списано с баланса",
     )
-    
     is_trial = models.BooleanField(
         default=False,
         help_text="True, если это пробное занятие (не списывается с баланса)",
@@ -164,8 +163,9 @@ class Course(models.Model):
         blank=True,
         help_text="Описание курса с разметкой. Переносы строк и форматирование сохраняются.",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    # ВРЕМЕННО УБРАНО: created_at и updated_at будут добавлены после применения миграций
+    # created_at = models.DateTimeField(auto_now_add=True)
+    # updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ['id']

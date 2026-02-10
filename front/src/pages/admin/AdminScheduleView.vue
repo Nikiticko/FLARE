@@ -69,6 +69,12 @@ const loadLessons = async (params = {}) => {
   try {
     const { data } = await adminGetLessons(params)
     lessons.value = Array.isArray(data) ? data : data.results || []
+    console.log('[Admin] Loaded lessons count:', lessons.value.length)
+    // Проверка что все уроки имеют ID
+    const lessonsWithoutId = lessons.value.filter(l => !l.id)
+    if (lessonsWithoutId.length > 0) {
+      console.error('[Admin] Found lessons without ID:', lessonsWithoutId)
+    }
   } catch (err) {
     console.error('load lessons error:', err)
     lessonsError.value = 'Ошибка загрузки уроков'
@@ -88,14 +94,42 @@ const handleCreateLesson = async (payload) => {
 }
 
 const handleUpdateLesson = async (lessonId, payload) => {
+  console.log('[Admin] handleUpdateLesson called with lessonId:', lessonId, 'payload:', payload)
+  
   try {
     const response = await adminUpdateLesson(lessonId, payload)
-    await loadLessons()
-    // Возвращаем обновленный урок из ответа или находим его в списке
+    
+    console.log('[Admin] Response from server:', response)
+    console.log('[Admin] Response data:', response?.data)
+    console.log('[Admin] Response data.id:', response?.data?.id)
+    
+    // Обновляем только измененный урок в списке вместо перезагрузки всего списка
+    // Это сохраняет данные, полученные от сервера (включая feedback)
     if (response?.data) {
-      return response.data
+      const updatedLesson = response.data
+      
+      // Проверяем наличие ID
+      if (!updatedLesson.id) {
+        console.error('[Admin] Обновлённый урок не содержит ID!', updatedLesson)
+        console.error('[Admin] Перезагружаем список уроков...')
+        await loadLessons()
+        return lessons.value.find(l => l.id === lessonId) || null
+      }
+      
+      const index = lessons.value.findIndex(l => l.id === lessonId)
+      if (index !== -1) {
+        // Используем splice для правильной реактивности Vue
+        lessons.value.splice(index, 1, updatedLesson)
+        console.log('[Admin] Урок обновлён в списке, index:', index)
+      } else {
+        console.warn('[Admin] Урок не найден в списке, добавляем его')
+        lessons.value.push(updatedLesson)
+      }
+      return updatedLesson
     }
-    // Если ответ не содержит данных, находим обновленный урок в списке
+    
+    // Если ответ не содержит данных, перезагружаем список
+    await loadLessons()
     const updatedLesson = lessons.value.find(l => l.id === lessonId)
     return updatedLesson || null
   } catch (err) {

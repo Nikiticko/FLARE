@@ -59,13 +59,14 @@
               >
                 <div
                   v-for="lesson in lessonsBySlot[day.iso + '-' + hour] || []"
-                  :key="lesson.id"
+                  :key="lesson.id || `lesson-${Math.random()}`"
                   :class="[
                     'lesson-card', 
                     `lesson-card--${lesson.status?.toLowerCase() || 'planned'}`,
                     { 'lesson-card--trial': lesson.is_trial }
                   ]"
                   @click.stop="selectLesson(lesson)"
+                  :title="`ID: ${lesson.id || 'NO ID'}`"
                 >
                   <div class="lesson-time">
                     {{ formatLessonTime(lesson.scheduled_at) }}
@@ -74,6 +75,7 @@
                     {{ lesson.student_email || ('Уч. ID ' + lesson.student) }}
                   </div>
                   <div v-if="lesson.is_trial" class="lesson-trial-badge">Пробное</div>
+                  <div v-if="!lesson.id" class="lesson-error-badge" style="color: red; font-size: 10px;">⚠ NO ID</div>
                 </div>
               </div>
             </div>
@@ -510,7 +512,15 @@ const activeLesson = ref(null)
 
 const lessonsBySlot = computed(() => {
   const map = {}
+  console.log('[ScheduleView] lessonsBySlot computing, total lessons:', props.lessons.length)
+  
   for (const L of props.lessons) {
+    // Проверяем наличие ID - пропускаем уроки без ID
+    if (!L.id) {
+      console.error('[ScheduleView] Урок без ID обнаружен (пропускаем):', L)
+      continue // Пропускаем урок без ID вместо добавления в map
+    }
+    
     if (!L.scheduled_at) continue
     const dt = new Date(L.scheduled_at)
     const hour = dt.getHours()
@@ -520,6 +530,8 @@ const lessonsBySlot = computed(() => {
     if (!map[key]) map[key] = []
     map[key].push(L)
   }
+  
+  console.log('[ScheduleView] lessonsBySlot map created, total slots:', Object.keys(map).length)
   return map
 })
 
@@ -955,6 +967,7 @@ const handleCreate = async () => {
 }
 
 const selectLesson = (lesson) => {
+  console.log('Selecting lesson:', lesson, 'ID:', lesson?.id)
   activeLesson.value = lesson
   emit('lesson-selected', lesson)
   // Сразу открываем форму редактирования
@@ -987,6 +1000,11 @@ const openEditLesson = () => {
   if (!activeLesson.value) return
   
   const lesson = activeLesson.value
+  console.log('[openEditLesson] Открываем урок для редактирования:', lesson)
+  console.log('[openEditLesson] ID урока:', lesson.id)
+  console.log('[openEditLesson] feedback:', lesson.feedback)
+  console.log('[openEditLesson] cancellation_reason:', lesson.cancellation_reason)
+  
   const scheduledDate = new Date(lesson.scheduled_at)
   
   editForm.value = {
@@ -999,6 +1017,8 @@ const openEditLesson = () => {
     feedback: lesson.feedback || '',
     course_id: lesson.course_id ?? ''
   }
+  
+  console.log('[openEditLesson] Форма редактирования:', editForm.value)
   updateError.value = null
   showEditModal.value = true
 }
@@ -1073,18 +1093,43 @@ const handleUpdate = async () => {
       payload.scheduled_at = `${editForm.value.date}T${timeStr}${offsetStr}`
     }
 
-    console.log('Updating lesson with payload:', payload)
+    // Проверяем что у урока есть ID
+    if (!activeLesson.value.id) {
+      console.error('Ошибка: у активного урока отсутствует ID', activeLesson.value)
+      updateError.value = 'Ошибка: не удалось определить ID урока'
+      updateLoading.value = false
+      return
+    }
+
+    console.log('Updating lesson ID:', activeLesson.value.id, 'with payload:', payload)
     const updatedLesson = await props.onUpdateLesson(activeLesson.value.id, payload)
+    
+    console.log('[handleUpdate] Получен обновлённый урок:', updatedLesson)
+    console.log('[handleUpdate] ID обновлённого урока:', updatedLesson?.id)
+    console.log('[handleUpdate] feedback в обновлённом уроке:', updatedLesson?.feedback)
+    console.log('[handleUpdate] cancellation_reason в обновлённом уроке:', updatedLesson?.cancellation_reason)
     
     // Обновляем activeLesson с новыми данными
     if (updatedLesson) {
+      // Дополнительная проверка ID
+      if (!updatedLesson.id) {
+        console.error('[handleUpdate] КРИТИЧЕСКАЯ ОШИБКА: обновлённый урок не содержит ID!', updatedLesson)
+        updateError.value = 'Ошибка: сервер вернул урок без ID'
+        updateLoading.value = false
+        return
+      }
+      
       activeLesson.value = updatedLesson
+      console.log('[handleUpdate] activeLesson обновлён, новые данные:', activeLesson.value)
     } else {
       // Если обновленный урок не возвращен, обновляем из списка уроков
       const lessonId = activeLesson.value.id
       const refreshedLesson = props.lessons.find(l => l.id === lessonId)
       if (refreshedLesson) {
         activeLesson.value = refreshedLesson
+        console.log('[handleUpdate] activeLesson обновлён из списка уроков:', activeLesson.value)
+      } else {
+        console.warn('[handleUpdate] Не удалось найти обновлённый урок в списке')
       }
     }
     
