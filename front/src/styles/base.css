@@ -1,0 +1,177 @@
+/* Базовые стили для всего проекта F.L.A.R.E. */
+
+:root {
+  --color-bg-primary: #1A1A1A;
+  --color-bg-card: rgba(40, 40, 40, 0.8);
+  --color-accent: #FFD700;
+  --color-accent-hover: #FF8C00;
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: rgba(255, 255, 255, 0.8);
+  --color-border: rgba(255, 215, 0, 0.3);
+  --color-border-hover: #FFD700;
+  --border-radius: 12px;
+  --border-radius-small: 8px;
+  --shadow-card: 0 4px 15px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 12px 30px rgba(255, 215, 0, 0.3);
+  --transition: all 0.3s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding: 0;
+}
+
+/* Базовые карточки */
+.base-card {
+  background: var(--color-bg-card);
+  border: 3px solid var(--color-accent);
+  border-radius: var(--border-radius);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  transition: var(--transition);
+}
+
+.base-card:hover {
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-accent-hover);
+  transform: translateY(-2px);
+}
+
+/* Базовые кнопки */
+.base-btn {
+  padding: 12px 24px;
+  border-radius: var(--border-radius-small);
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.base-btn:hover:not(:disabled) {
+  background: var(--color-accent);
+  color: var(--color-bg-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+}
+
+.base-btn-primary {
+  background: var(--color-accent);
+  color: var(--color-bg-primary);
+  border-color: var(--color-accent);
+}
+
+.base-btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+}
+
+.base-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Базовые инпуты */
+.base-input {
+  padding: 12px 16px;
+  border-radius: var(--border-radius-small);
+  border: 2px solid var(--color-border);
+  background: rgba(40, 45, 60, 0.8);
+  color: var(--color-text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: var(--transition);
+  font-family: inherit;
+}
+
+.base-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.base-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: rgba(40, 45, 60, 1);
+  box-shadow: 0 0 0 4px rgba(255, 215, 0, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Базовые заголовки */
+.base-title {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--color-text-primary);
+  margin: 0 0 16px 0;
+  letter-spacing: -1px;
+}
+
+.base-subtitle {
+  font-size: 1rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 24px 0;
+  font-weight: 400;
+}
+
+/* Состояния */
+.loading-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 215, 0, 0.2);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.error-message {
+  padding: 12px 16px;
+  background: rgba(255, 68, 68, 0.2);
+  border: 2px solid rgba(255, 68, 68, 0.4);
+  border-radius: var(--border-radius-small);
+  color: #ffaaaa;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.success-message {
+  padding: 12px 16px;
+  background: rgba(76, 175, 80, 0.2);
+  border: 2px solid rgba(76, 175, 80, 0.4);
+  border-radius: var(--border-radius-small);
+  color: #a5d6a7;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+
