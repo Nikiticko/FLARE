@@ -4,10 +4,12 @@
 - PLANNED (будущее)
 - DONE (прошлое)
 - CANCELLED (прошлое)
+- TRIAL (пробные занятия)
 
 Пример:
   python manage_test_lessons.py
   python manage_test_lessons.py --per-student 2
+  python manage_test_lessons.py --per-student 3 --with-trial
 """
 import argparse
 import os
@@ -73,6 +75,7 @@ def create_lesson(student, teacher, course, status, scheduled_at):
 def main():
     parser = argparse.ArgumentParser(description="Создание тестовых уроков")
     parser.add_argument("--per-student", type=int, default=1, help="Сколько уроков каждого статуса на ученика")
+    parser.add_argument("--with-trial", action="store_true", help="Создать также пробные уроки")
     args = parser.parse_args()
 
     User = get_user_model()
@@ -106,6 +109,23 @@ def main():
             planned_at = normalized_time(now + timedelta(days=1 + i), hour=16 + i)
             create_lesson(student, teacher, course, Lesson.STATUS_PLANNED, planned_at)
             created += 1
+
+            # TRIAL: пробное занятие (если указан флаг --with-trial)
+            if args.with_trial:
+                trial_at = normalized_time(now + timedelta(days=2 + i), hour=14 + i)
+                Lesson.objects.create(
+                    student=student,
+                    parent_full_name=student.parent_full_name or "",
+                    teacher=teacher,
+                    course=course,
+                    link="Discord",
+                    scheduled_at=trial_at,
+                    status=Lesson.STATUS_PLANNED,
+                    comment="Пробное занятие",
+                    is_trial=True,
+                    debited_from_balance=False,
+                )
+                created += 1
 
     print("✓ Готово")
     print(f"Создано уроков: {created}")

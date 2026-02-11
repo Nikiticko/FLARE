@@ -137,23 +137,27 @@ class ManagerLessonCreateSerializer(serializers.ModelSerializer):
             logger.error("Teacher is required but not provided")
             raise serializers.ValidationError({"teacher": "Either teacher or teacher_email is required"})
         
-        # ВРЕМЕННО УБРАНА валидация is_trial до применения миграций
-        # Просто проверяем баланс
+        # Проверка баланса (не применяется к пробным урокам)
         student = attrs.get('student')
+        is_trial = attrs.get('is_trial', False)
+        
         if student:
             from .models import LessonBalance
             student_role = getattr(student, 'role', None)
-            lb, _ = LessonBalance.objects.get_or_create(student=student)
             
-            # Обычные занятия можно создавать только для учеников с положительным балансом
+            # Проверяем, что это именно ученик
             if student_role != 'STUDENT':
                 raise serializers.ValidationError({
-                    "student": "Обычные занятия можно создавать только для учеников."
+                    "student": "Занятия можно создавать только для учеников."
                 })
-            if lb.lessons_available <= 0:
-                raise serializers.ValidationError({
-                    "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика."
-                })
+            
+            # Для пробных уроков не проверяем баланс
+            if not is_trial:
+                lb, _ = LessonBalance.objects.get_or_create(student=student)
+                if lb.lessons_available <= 0:
+                    raise serializers.ValidationError({
+                        "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика или отметьте урок как пробный."
+                    })
         
         logger.info(f"Validation successful. Final attrs: student={attrs.get('student')}, teacher={attrs.get('teacher')}")
         return attrs
