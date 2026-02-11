@@ -92,9 +92,13 @@
                 v-for="(lesson, index) in upcomingLessons" 
                 :key="lesson.id" 
                 class="schedule-item"
+                :class="{ 'schedule-item--ongoing': isLessonOngoing(lesson) }"
               >
                 <div class="schedule-date">
                   {{ formatDate(lesson.scheduled_at) }} в {{ formatTime(lesson.scheduled_at) }}
+                </div>
+                <div v-if="isLessonOngoing(lesson)" class="ongoing-badge">
+                  🔴 Занятие идёт сейчас
                 </div>
                 <div class="schedule-course">Курс: {{ lesson.course || '—' }}</div>
                 <div class="schedule-teacher">Преподаватель: {{ lesson.teacher_full_name || 'Не назначен' }}</div>
@@ -234,15 +238,32 @@ const historyLessons = computed(() => {
 
 const upcomingLessons = computed(() => {
   const now = new Date()
+  const lessonDurationMinutes = 60 // Длительность урока в минутах
+  
   return lessons.value
     .filter(lesson => {
       if (!lesson.scheduled_at) return false
       const lessonDate = new Date(lesson.scheduled_at)
-      return lessonDate >= now && lesson.status === 'PLANNED'
+      const lessonEndDate = new Date(lessonDate.getTime() + lessonDurationMinutes * 60 * 1000)
+      
+      // Показываем если урок ещё не закончился (включая текущие)
+      return lessonEndDate >= now && lesson.status === 'PLANNED'
     })
     .sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at))
     .slice(0, 3) // Максимум 3 занятия
 })
+
+const isLessonOngoing = (lesson) => {
+  if (!lesson.scheduled_at) return false
+  
+  const now = new Date()
+  const lessonDate = new Date(lesson.scheduled_at)
+  const lessonDurationMinutes = 60 // Длительность урока в минутах
+  const lessonEndDate = new Date(lessonDate.getTime() + lessonDurationMinutes * 60 * 1000)
+  
+  // Урок идёт прямо сейчас, если текущее время между началом и концом урока
+  return now >= lessonDate && now <= lessonEndDate
+}
 
 const historyTotalPages = computed(() => {
   return allHistoryLessons.value.length > 0 ? Math.ceil(allHistoryLessons.value.length / historyPageSize) : 1
@@ -523,6 +544,25 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.schedule-item--ongoing {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #FFD700;
+  border-width: 3px;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+  }
 }
 
 .schedule-item--clickable {
@@ -539,6 +579,29 @@ onMounted(async () => {
   font-weight: 600;
   color: #FFFFFF;
   font-size: 0.95rem;
+}
+
+.ongoing-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: rgba(255, 76, 76, 0.2);
+  border: 1px solid #ff4c4c;
+  border-radius: 6px;
+  color: #ff4c4c;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  margin: 4px 0;
+  animation: blink 1.5s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }
 
 .schedule-course,
