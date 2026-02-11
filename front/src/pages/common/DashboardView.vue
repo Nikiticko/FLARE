@@ -138,9 +138,9 @@
             <span class="detail-label">Преподаватель:</span>
             <span class="detail-value">{{ selectedHistoryLesson.teacher_full_name || 'Не назначен' }}</span>
           </div>
-          <div class="detail-item" v-if="selectedHistoryLesson.feedback">
+          <div class="detail-item detail-item--full" v-if="selectedHistoryLesson.feedback">
             <span class="detail-label">Обратная связь:</span>
-            <span class="detail-value">{{ selectedHistoryLesson.feedback }}</span>
+            <div class="detail-value feedback-text">{{ selectedHistoryLesson.feedback }}</div>
           </div>
         </div>
         <div class="modal-footer">
@@ -652,6 +652,21 @@ onMounted(async () => {
 
 .detail-value {
   font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.detail-item--full {
+  margin-top: 8px;
+}
+
+.feedback-text {
+  background: rgba(60, 60, 60, 0.5);
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 3px solid #FFD700;
+  white-space: pre-wrap;
+  line-height: 1.6;
+  margin-top: 6px;
   color: rgba(255, 255, 255, 0.95);
 }
 
