@@ -50,35 +50,30 @@
               class="calendar-cell slot"
               @click="handleSlotClick($event, day.iso, hour)"
             >
-              <!-- Контейнер для всех карточек уроков (80% ширины) -->
-              <div 
-                :class="[
-                  'slot-lessons-container',
-                  { 'slot-lessons-container--scrollable': (lessonsBySlot[day.iso + '-' + hour] || []).length > 5 }
-                ]"
-              >
-                <div
-                  v-for="lesson in lessonsBySlot[day.iso + '-' + hour] || []"
-                  :key="lesson.id || `lesson-${Math.random()}`"
-                  :class="[
-                    'lesson-card', 
-                    `lesson-card--${lesson.status?.toLowerCase() || 'planned'}`,
-                    { 'lesson-card--trial': lesson.is_trial }
-                  ]"
-                  @click.stop="selectLesson(lesson)"
-                  :title="`ID: ${lesson.id || 'NO ID'}`"
-                >
-                  <div class="lesson-time">
-                    {{ formatLessonTime(lesson.scheduled_at) }}
-                  </div>
-                  <div class="lesson-student">
-                    {{ lesson.student_email || ('Уч. ID ' + lesson.student) }}
-                  </div>
-                  <div v-if="lesson.is_trial" class="lesson-trial-badge">Пробное</div>
-                  <div v-if="!lesson.id" class="lesson-error-badge" style="color: red; font-size: 10px;">⚠ NO ID</div>
-                </div>
-              </div>
+              <!-- Слот теперь пустой, карточки позиционируются абсолютно -->
             </div>
+          </div>
+          
+          <!-- Абсолютно позиционированные карточки уроков с учетом минут -->
+          <div
+            v-for="item in lessonsWithPositions"
+            :key="item.lesson.id"
+            :class="[
+              'lesson-card-positioned', 
+              `lesson-card--${item.lesson.status?.toLowerCase() || 'planned'}`,
+              { 'lesson-card--trial': item.lesson.is_trial }
+            ]"
+            :style="item.style"
+            @click="selectLesson(item.lesson)"
+            :title="`ID: ${item.lesson.id}`"
+          >
+            <div class="lesson-time">
+              {{ formatLessonTime(item.lesson.scheduled_at) }}
+            </div>
+            <div class="lesson-student">
+              {{ item.lesson.student_email || ('Уч. ID ' + item.lesson.student) }}
+            </div>
+            <div v-if="item.lesson.is_trial" class="lesson-trial-badge">Пробное</div>
           </div>
         </div>
       </div>
@@ -533,6 +528,52 @@ const lessonsBySlot = computed(() => {
   
   console.log('[ScheduleView] lessonsBySlot map created, total slots:', Object.keys(map).length)
   return map
+})
+
+// Вычисляем позиции уроков с учетом минут для точного позиционирования
+const lessonsWithPositions = computed(() => {
+  if (!calendarBodyWidth.value || !weekDays.value.length) return []
+  
+  const result = []
+  const startHour = timeSlots[0]
+  const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  
+  for (const lesson of props.lessons) {
+    if (!lesson.id || !lesson.scheduled_at) continue
+    
+    const dt = new Date(lesson.scheduled_at)
+    const lessonIso = toISO(dt)
+    
+    // Находим индекс дня недели
+    const dayIndex = weekDays.value.findIndex(day => day.iso === lessonIso)
+    if (dayIndex < 0) continue // Урок вне текущей недели
+    
+    // Вычисляем позицию по вертикали (учитываем часы и минуты)
+    const lessonHour = dt.getHours()
+    const lessonMinutes = dt.getMinutes()
+    const totalMinutes = lessonHour * 60 + lessonMinutes
+    const minutesFromStart = totalMinutes - startHour * 60
+    const top = (minutesFromStart / 60) * slotHeight
+    
+    // Вычисляем позицию по горизонтали
+    const left = timeColWidth + dayWidth * dayIndex
+    const width = dayWidth * 0.8 // Занимаем 80% ширины колонки дня
+    
+    // Высота карточки = 1 час
+    const height = slotHeight
+    
+    result.push({
+      lesson,
+      style: {
+        top: `${top}px`,
+        left: `${left}px`,
+        width: `${width}px`,
+        height: `${height}px`
+      }
+    })
+  }
+  
+  return result
 })
 
 const formatHour = (h) => `${String(h).padStart(2, '0')}:00`
@@ -1648,6 +1689,73 @@ defineExpose({
   letter-spacing: 0.5px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   z-index: 10;
+}
+
+/* Стили для абсолютно позиционированных карточек уроков */
+.lesson-card-positioned {
+  position: absolute;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 3px 5px;
+  margin: 0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: box-shadow 0.2s ease, z-index 0s;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  border-left: 3px solid transparent;
+  z-index: 3;
+  isolation: isolate;
+  box-sizing: border-box;
+}
+
+.lesson-card-positioned:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+  z-index: 100 !important;
+}
+
+/* Применяем стили статусов к позиционированным карточкам */
+.lesson-card-positioned.lesson-card--planned {
+  background: #3b82f6;
+  border-left-color: #2563eb;
+}
+
+.lesson-card-positioned.lesson-card--done {
+  background: #22c55e;
+  border-left-color: #16a34a;
+}
+
+.lesson-card-positioned.lesson-card--cancelled {
+  background: #ef4444;
+  border-left-color: #dc2626;
+}
+
+.lesson-card-positioned.lesson-card--trial {
+  background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+  border-left-color: #ea580c;
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.lesson-card-positioned.lesson-card--trial:hover {
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.lesson-card-positioned.lesson-card--trial.lesson-card--planned {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 50%, #f59e0b 100%);
+  border-left-color: #2563eb;
+}
+
+.lesson-card-positioned.lesson-card--trial.lesson-card--done {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 50%, #f59e0b 100%);
+  border-left-color: #16a34a;
+}
+
+.lesson-card-positioned.lesson-card--trial.lesson-card--cancelled {
+  background: linear-gradient(135deg, #f87171 0%, #ef4444 50%, #f59e0b 100%);
+  border-left-color: #dc2626;
 }
 
 
