@@ -35,14 +35,24 @@
               Telegram
             </a>
           </li>
-          
+          <li>
+            <a href="tel:+79784741326" class="footer-link">
+              Телефон: +7 978 474 13 26
+            </a>
+          </li>
+          <li>
+            <a href="mailto:nikitasemenenko3@gmail.com" class="footer-link">
+              Email: nikitasemenenko3@gmail.com
+            </a>
+          </li>
         </ul>
       </div>
       <div class="footer-column">
-        <h4 class="footer-column-title">F.L.A.R.E.</h4>
-        <p class="footer-description">
-          Создан для удобства клиентов с любовью ❤️
-        </p>
+        <h4 class="footer-column-title">Реквизиты</h4>
+        <p class="footer-description">Статус: самозанятый</p>
+        <p class="footer-description">ФИО: Семененко Никита Сергеевич</p>
+        <p class="footer-description">ИНН: 910821447791</p>
+        <p class="footer-description">Вид услуг: образовательные услуги</p>
       </div>
     </div>
   </footer>

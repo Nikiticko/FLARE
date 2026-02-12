@@ -3,117 +3,72 @@
   <div class="payment-page">
     <div class="payment-content">
       <h1 class="page-title">Оплата занятий</h1>
-
-      <!-- Основные блоки -->
-      <div class="main-blocks">
-        <!-- Блок: Стоимость одного занятия -->
-        <div class="card price-card">
-          <h2 class="card-title">Стоимость одного занятия</h2>
-          <div class="price-block">
-            <div class="price-value">800 ₽</div>
-            <div class="price-label">за 1 урок</div>
+      <div class="card calculator-card">
+        <div class="calculator-header">
+          <h2 class="card-title">Калькулятор оплаты</h2>
+          <div class="price-row">
+            <span class="price-label">Цена за занятие</span>
+            <span class="price-value">800 ₽</span>
           </div>
         </div>
 
-        <!-- Блок: Важная информация -->
-        <div class="card info-card">
-          <h2 class="card-title">Важная информация</h2>
-          <div class="info-block warning">
-            <div class="info-icon">⚠️</div>
-            <div class="info-text">
-              На данный момент на платформе нет менеджеров. Чек об оплате необходимо отправлять лично преподавателю, по совместительству менеджеру и администратору.
-            </div>
-          </div>
+        <div class="preset-options">
+          <button
+            type="button"
+            class="preset-option"
+            :class="{ 'preset-option--active': selectedOption === 1 }"
+            @click="selectOption(1)"
+          >
+            1 занятие
+          </button>
+          <button
+            type="button"
+            class="preset-option"
+            :class="{ 'preset-option--active': selectedOption === 5 }"
+            @click="selectOption(5)"
+          >
+            5 занятий
+          </button>
+          <button
+            type="button"
+            class="preset-option"
+            :class="{ 'preset-option--active': selectedOption === 10 }"
+            @click="selectOption(10)"
+          >
+            10 занятий
+          </button>
         </div>
-      </div>
 
-      <!-- Кнопка для раскрытия инструкции -->
-      <div class="instruction-toggle">
+        <div class="custom-input">
+          <label class="input-label" for="customCount">Свой вариант</label>
+          <input
+            id="customCount"
+            v-model.trim="customCount"
+            class="input-field"
+            type="number"
+            inputmode="numeric"
+            min="1"
+            step="1"
+            placeholder="Введите количество занятий"
+            @input="selectOption('custom')"
+          />
+          <p class="input-hint">Только целое положительное число</p>
+        </div>
+
+        <div class="total-row">
+          <span class="total-label">Итого</span>
+          <span class="total-value">{{ totalAmount }} ₽</span>
+        </div>
+
         <button
           type="button"
-          class="instruction-btn"
-          :class="{ 'instruction-btn--open': showInstructions }"
-          @click="showInstructions = !showInstructions"
+          class="pay-button"
+          :disabled="!isValid"
+          @click="handlePay"
         >
-          <span class="instruction-btn-text">
-            {{ showInstructions ? 'Скрыть инструкцию' : 'Инструкция по оплате' }}
-          </span>
-          <span class="instruction-btn-icon">{{ showInstructions ? '▲' : '▼' }}</span>
+          Оплатить
         </button>
       </div>
-
-      <!-- Раскрываемые блоки -->
-      <Transition name="expand">
-        <div v-if="showInstructions" class="expandable-blocks">
-          <!-- Реквизиты для оплаты -->
-          <div class="card payment-card">
-            <h2 class="card-title">Реквизиты для оплаты</h2>
-            <div class="payment-info">
-              <div class="payment-row">
-                <span class="payment-label">Способ оплаты:</span>
-                <span class="payment-value">СБП (Система быстрых платежей)</span>
-              </div>
-              <div class="payment-row">
-                <span class="payment-label">Банк:</span>
-                <span class="payment-value">ВТБ</span>
-              </div>
-              <div class="payment-row">
-                <span class="payment-label">Номер телефона:</span>
-                <span class="payment-value phone-number">+7 978 474 13 26</span>
-              </div>
-              <div class="payment-row">
-                <span class="payment-label">Получатель:</span>
-                <span class="payment-value">Семененко Никита Сергеевич</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Отправка чека -->
-          <div class="card contact-card">
-            <h2 class="card-title">Отправка чека</h2>
-            <p class="contact-description">
-              После оплаты отправьте скриншот или фото чека преподавателю для подтверждения и начисления занятий на ваш баланс.
-            </p>
-            <div class="contact-info">
-              <div class="contact-row">
-                <span class="contact-label">Telegram:</span>
-                <a href="https://t.me/nikiticko" target="_blank" class="contact-link">@nikiticko</a>
-              </div>
-              <div class="contact-row">
-                <span class="contact-label">Телефон:</span>
-                <span class="contact-value">+7 978 474 13 26</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Как оплатить -->
-          <div class="card instructions-card">
-            <h2 class="card-title">Как оплатить</h2>
-            <div class="steps">
-              <div class="step">
-                <div class="step-number">1</div>
-                <div class="step-text">Откройте приложение вашего банка и выберите оплату по СБП</div>
-              </div>
-              <div class="step">
-                <div class="step-number">2</div>
-                <div class="step-text">Введите номер телефона <strong>+7 978 474 13 26</strong> и выберите банк <strong>ВТБ</strong></div>
-              </div>
-              <div class="step">
-                <div class="step-number">3</div>
-                <div class="step-text">Укажите сумму (800₽ × количество уроков) и выполните перевод</div>
-              </div>
-              <div class="step">
-                <div class="step-number">4</div>
-                <div class="step-text">Отправьте скриншот чека в Telegram <strong>@nikiticko</strong></div>
-              </div>
-              <div class="step">
-                <div class="step-number">5</div>
-                <div class="step-text">После подтверждения занятия будут начислены на ваш баланс</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
     </div>
 
     <Footer />
@@ -121,10 +76,57 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import Footer from '../../components/Footer.vue'
 
-const showInstructions = ref(false)
+const lessonPrice = 800
+const selectedOption = ref(1)
+const customCount = ref('')
+
+const isCustomSelected = computed(() => selectedOption.value === 'custom')
+const parsedCustomCount = computed(() => {
+  const value = customCount.value.trim()
+  if (!value) {
+    return null
+  }
+
+  if (!/^\d+$/.test(value)) {
+    return null
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  return parsed > 0 ? parsed : null
+})
+
+const lessonCount = computed(() => {
+  if (isCustomSelected.value) {
+    return parsedCustomCount.value
+  }
+
+  return selectedOption.value
+})
+
+const isValid = computed(() => lessonCount.value !== null && lessonCount.value > 0)
+
+const totalAmount = computed(() => {
+  if (!isValid.value) {
+    return 0
+  }
+
+  return lessonCount.value * lessonPrice
+})
+
+function selectOption(option) {
+  selectedOption.value = option
+}
+
+function handlePay() {
+  if (!isValid.value) {
+    return
+  }
+
+  // Заглушка до подключения Робокассы
+}
 </script>
 
 <style scoped>
@@ -140,9 +142,9 @@ const showInstructions = ref(false)
 /* Контент */
 .payment-content {
   flex: 1;
-  max-width: 1000px;
+  max-width: 880px;
   margin: 0 auto;
-  padding: 32px;
+  padding: 48px 32px 32px;
   width: 100%;
 }
 
@@ -154,110 +156,155 @@ const showInstructions = ref(false)
   margin: 0 0 32px 0;
 }
 
-/* Основные блоки */
-.main-blocks {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
-  margin-bottom: 24px;
+.card {
+  background: rgba(36, 36, 36, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 28px;
 }
 
-/* Карточки */
-.card {
-  background: rgba(40, 40, 40, 0.8);
-  border: 3px solid #FFD700;
-  border-radius: 12px;
-  padding: 24px;
+.calculator-card {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.calculator-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .card-title {
-  font-size: 1.3rem;
+  font-size: 1.4rem;
   font-weight: 800;
-  color: #FFFFFF;
-  margin: 0 0 20px 0;
-  padding-bottom: 12px;
-  border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+  margin: 0;
 }
 
-/* Карточка с ценой */
-.price-card {
+.price-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.price-block {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.price-value {
-  font-size: 3.5rem;
-  font-weight: 900;
-  color: #FFD700;
-  text-shadow: 0 4px 20px rgba(255, 215, 0, 0.4);
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .price-label {
-  font-size: 1.2rem;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-/* Информационная карточка */
-.info-block {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.info-block.warning {
-  background: rgba(255, 193, 7, 0.15);
-  border: 1px solid rgba(255, 193, 7, 0.4);
-}
-
-.info-icon {
-  font-size: 1.5rem;
-  flex-shrink: 0;
-}
-
-.info-text {
   font-size: 1rem;
-  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.price-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: #FFD700;
+}
+
+.preset-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.preset-option {
+  padding: 14px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.preset-option--active {
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.12);
+  color: #FFD700;
+}
+
+.custom-input {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input-label {
+  font-weight: 700;
+  font-size: 1rem;
   color: rgba(255, 255, 255, 0.9);
 }
 
-/* Кнопка инструкции */
-.instruction-toggle {
+.input-field {
+  background: rgba(20, 20, 20, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  color: #FFFFFF;
+  outline: none;
+}
+
+.input-field:focus {
+  border-color: #FFD700;
+}
+
+.input-hint {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.total-row {
   display: flex;
-  justify-content: center;
-  margin-bottom: 24px;
-}
-
-.instruction-btn {
-  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 14px 28px;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #1A1A1A;
-  background: #FFD700;
-  border: 2px solid #FFD700;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.instruction-btn:hover {
+.total-label {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.total-value {
+  font-size: 1.8rem;
+  font-weight: 800;
+  color: #FFD700;
+}
+
+.pay-button {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: none;
+  background: #FFD700;
+  color: #1A1A1A;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.pay-button:hover:enabled {
   background: #FFC700;
-  border-color: #FFC700;
-  transform: translateY(-2px);
+  transform: translateY(-1px);
+}
+
+.pay-button:disabled {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: not-allowed;
+}
+
+.pay-note {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
 }
 
 .instruction-btn--open {
@@ -453,13 +500,17 @@ const showInstructions = ref(false)
 
 @media (max-width: 480px) {
   .payment-content {
-    padding: 16px 12px;
+    padding: 40px 20px 24px;
   }
 
   .page-title {
     font-size: 1.5rem;
   }
 
+
+  .preset-options {
+    grid-template-columns: 1fr;
+  }
   .card {
     padding: 16px;
   }
