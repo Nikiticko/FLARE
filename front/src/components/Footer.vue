@@ -20,6 +20,11 @@
               О преподавателе
             </RouterLink>
           </li>
+          <li>
+            <RouterLink :to="{ name: 'public-offer' }" class="footer-link">
+              Договор публичной оферты
+            </RouterLink>
+          </li>
         </ul>
       </div>
       <div class="footer-column">

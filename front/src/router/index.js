@@ -19,6 +19,7 @@ import TeacherScheduleView from '../pages/teacher/TeacherScheduleView.vue'
 import PaymentCalculatorView from '../pages/common/PaymentCalculatorView.vue'
 import AboutServiceView from '../pages/common/AboutServiceView.vue'
 import AboutTeacherView from '../pages/common/AboutTeacherView.vue'
+import PublicOfferView from '../pages/common/PublicOfferView.vue'
 
 const routes = [
   {
@@ -141,6 +142,12 @@ const routes = [
     component: AboutTeacherView,
     meta: { guestOnly: false },
   },
+  {
+    path: '/public-offer',
+    name: 'public-offer',
+    component: PublicOfferView,
+    meta: { guestOnly: false },
+  },
   // Catch-all маршрут для 404 - перенаправляет на главную
   {
     path: '/:pathMatch(.*)*',
@@ -175,6 +182,7 @@ const pageTitles = {
   'teacher-students': 'Ученики — Учитель — F.L.A.R.E.',
   'teacher-schedule': 'Расписание — Учитель — F.L.A.R.E.',
   'payment-calculator': 'Калькулятор оплаты — F.L.A.R.E.',
+  'public-offer': 'Договор публичной оферты — F.L.A.R.E.',
 }
 
 router.beforeEach(async (to, from, next) => {
