@@ -70,6 +70,76 @@ def _append_query_param(url: str, key: str, value: str) -> str:
     return f"{url}{sep}{key}={value}"
 
 
+def _finalize_successful_payment(payment_id: int, event_name: str = "YOOKASSA_PAYMENT_SUCCEEDED"):
+    with transaction.atomic():
+        try:
+            payment = Payment.objects.select_for_update().select_related("student").get(pk=payment_id)
+        except Payment.DoesNotExist:
+            return
+
+        if payment.confirmed:
+            return
+
+        lessons_to_add = payment.lessons_count
+        if lessons_to_add <= 0:
+            lesson_price = Decimal(str(get_current_lesson_price_rub(default_price=1000)))
+            lessons_to_add = int(payment.amount / lesson_price)
+
+        lb, _ = LessonBalance.objects.select_for_update().get_or_create(student=payment.student)
+        lb.lessons_available += max(0, lessons_to_add)
+        lb.save()
+
+        old_role = payment.student.role
+        role_changed = False
+        if payment.student.role == User.Roles.APPLICANT and lessons_to_add > 0:
+            payment.student.role = User.Roles.STUDENT
+            payment.student.save(update_fields=["role"])
+            role_changed = True
+
+        payment.confirmed = True
+        payment.save(update_fields=["confirmed"])
+
+        AuditLog.objects.create(
+            actor=None,
+            action=event_name,
+            meta={
+                "payment_id": payment.id,
+                "yookassa_payment_id": payment.yookassa_payment_id,
+                "student": payment.student_id,
+                "lessons_added": lessons_to_add,
+                "old_role": old_role,
+                "new_role": payment.student.role,
+                "role_changed": role_changed,
+            },
+        )
+
+
+def _sync_payment_status_from_provider(payment: Payment):
+    if not payment.yookassa_payment_id:
+        return payment
+
+    try:
+        status_code, provider_payment = _yookassa_request("GET", f"payments/{payment.yookassa_payment_id}")
+    except ValueError as exc:
+        logger.error("YooKassa sync config error: %s", exc)
+        return payment
+
+    if status_code >= 400:
+        logger.warning("YooKassa sync failed: status=%s body=%s", status_code, provider_payment)
+        return payment
+
+    provider_status = provider_payment.get("status", "")
+    if provider_status and provider_status != payment.yookassa_status:
+        payment.yookassa_status = provider_status
+        payment.save(update_fields=["yookassa_status"])
+
+    if provider_status == "succeeded" and not payment.confirmed:
+        _finalize_successful_payment(payment.id, event_name="YOOKASSA_PAYMENT_SYNC_SUCCEEDED")
+        payment.refresh_from_db(fields=["confirmed", "yookassa_status", "amount", "lessons_count"])
+
+    return payment
+
+
 class YooKassaCreatePaymentAPI(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -194,6 +264,7 @@ class YooKassaPaymentStatusAPI(APIView):
 
         status_token = (request.query_params.get("status_token") or "").strip()
         if status_token and status_token == (payment.idempotence_key or ""):
+            payment = _sync_payment_status_from_provider(payment)
             return Response(
                 {
                     "id": payment.id,
@@ -214,6 +285,8 @@ class YooKassaPaymentStatusAPI(APIView):
 
         if not is_owner and not is_privileged:
             return Response({"detail": "forbidden"}, status=403)
+
+        payment = _sync_payment_status_from_provider(payment)
 
         return Response(
             {
@@ -280,41 +353,6 @@ class YooKassaWebhookAPI(APIView):
         if provider_status != "succeeded":
             return JsonResponse({"detail": "ok"}, status=200)
 
-        if payment.confirmed:
-            return JsonResponse({"detail": "ok"}, status=200)
-
-        lessons_to_add = payment.lessons_count
-        if lessons_to_add <= 0:
-            lesson_price = Decimal(str(get_current_lesson_price_rub(default_price=1000)))
-            lessons_to_add = int(payment.amount / lesson_price)
-
-        lb, _ = LessonBalance.objects.select_for_update().get_or_create(student=payment.student)
-        lb.lessons_available += max(0, lessons_to_add)
-        lb.save()
-
-        old_role = payment.student.role
-        role_changed = False
-        if payment.student.role == User.Roles.APPLICANT and lessons_to_add > 0:
-            payment.student.role = User.Roles.STUDENT
-            payment.student.save(update_fields=["role"])
-            role_changed = True
-
-        payment.confirmed = True
-        payment.save(update_fields=["confirmed"])
-
-        AuditLog.objects.create(
-            actor=None,
-            action="YOOKASSA_PAYMENT_SUCCEEDED",
-            meta={
-                "event": event,
-                "payment_id": payment.id,
-                "yookassa_payment_id": yookassa_payment_id,
-                "student": payment.student_id,
-                "lessons_added": lessons_to_add,
-                "old_role": old_role,
-                "new_role": payment.student.role,
-                "role_changed": role_changed,
-            },
-        )
+        _finalize_successful_payment(payment.id, event_name="YOOKASSA_PAYMENT_SUCCEEDED")
 
         return JsonResponse({"detail": "ok"}, status=200)
