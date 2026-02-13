@@ -1,7 +1,8 @@
 <template>
   <div class="payment-result-page">
     <div class="payment-result-card">
-      <h1 class="title">Оплата обрабатывается</h1>
+      <div class="status-icon" :class="statusIconClass">{{ statusIcon }}</div>
+      <h1 class="title">{{ titleText }}</h1>
       <p class="subtitle">{{ statusText }}</p>
       <RouterLink class="back-btn" to="/dashboard">Вернуться в личный кабинет</RouterLink>
     </div>
@@ -37,6 +38,36 @@ const statusText = computed(() => {
     return 'Платёж не прошёл. Попробуйте снова или используйте другой способ оплаты.'
   }
   return 'Ожидаем подтверждение оплаты от ЮKassa...'
+})
+
+const titleText = computed(() => {
+  if (status.value === 'succeeded') {
+    return 'Платёж успешно выполнен'
+  }
+  if (status.value === 'canceled' || status.value === 'failed') {
+    return 'Платёж не выполнен'
+  }
+  return 'Оплата обрабатывается'
+})
+
+const statusIcon = computed(() => {
+  if (status.value === 'succeeded') {
+    return '✓'
+  }
+  if (status.value === 'canceled' || status.value === 'failed') {
+    return '✕'
+  }
+  return '…'
+})
+
+const statusIconClass = computed(() => {
+  if (status.value === 'succeeded') {
+    return 'status-icon--success'
+  }
+  if (status.value === 'canceled' || status.value === 'failed') {
+    return 'status-icon--error'
+  }
+  return 'status-icon--pending'
 })
 
 async function checkStatus() {
@@ -112,6 +143,33 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.status-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.status-icon--success {
+  color: #1A1A1A;
+  background: #FFD700;
+}
+
+.status-icon--error {
+  color: #FFFFFF;
+  background: #A63A3A;
+}
+
+.status-icon--pending {
+  color: #1A1A1A;
+  background: #D4AF37;
 }
 
 .title {
