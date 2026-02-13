@@ -39,20 +39,21 @@
           </button>
         </div>
 
-        <div class="custom-input">
+        <div class="custom-input" :class="{ 'custom-input--active': isCustomSelected }">
           <label class="input-label" for="customCount">Свой вариант</label>
           <input
             id="customCount"
-            v-model.trim="customCount"
+            v-model="customCount"
             class="input-field"
+            :class="{ 'input-field--active': isCustomSelected }"
             type="number"
             inputmode="numeric"
             min="1"
+            max="20"
             step="1"
             placeholder="Введите количество занятий"
-            @input="selectOption('custom')"
           />
-          <p class="input-hint">Только целое положительное число</p>
+          <p class="input-hint">Только целое число от 1 до 20</p>
         </div>
 
         <div class="total-row">
@@ -77,7 +78,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Footer from '../../components/Footer.vue'
 import { createYookassaPayment } from '../../api/payments'
@@ -85,13 +86,14 @@ import { createYookassaPayment } from '../../api/payments'
 const router = useRouter()
 const lessonPrice = 1000
 const selectedOption = ref(1)
+const lastPresetOption = ref(1)
 const customCount = ref('')
 const isSubmitting = ref(false)
 const errorText = ref('')
 
 const isCustomSelected = computed(() => selectedOption.value === 'custom')
 const parsedCustomCount = computed(() => {
-  const value = customCount.value.trim()
+  const value = String(customCount.value ?? '').trim()
   if (!value) {
     return null
   }
@@ -101,7 +103,7 @@ const parsedCustomCount = computed(() => {
   }
 
   const parsed = Number.parseInt(value, 10)
-  return parsed > 0 ? parsed : null
+  return parsed > 0 && parsed <= 20 ? parsed : null
 })
 
 const lessonCount = computed(() => {
@@ -123,8 +125,26 @@ const totalAmount = computed(() => {
 })
 
 function selectOption(option) {
+  if (option === 'custom') {
+    return
+  }
+
   selectedOption.value = option
+  lastPresetOption.value = option
+  customCount.value = ''
 }
+
+watch(customCount, (newValue) => {
+  const value = String(newValue ?? '').trim()
+  if (value) {
+    selectedOption.value = 'custom'
+    return
+  }
+
+  if (selectedOption.value === 'custom') {
+    selectedOption.value = lastPresetOption.value
+  }
+})
 
 async function handlePay() {
   if (!isValid.value) {
@@ -262,6 +282,13 @@ async function handlePay() {
   gap: 10px;
 }
 
+.custom-input--active {
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #FFD700;
+  background: rgba(255, 215, 0, 0.08);
+}
+
 .input-label {
   font-weight: 700;
   font-size: 1rem;
@@ -280,6 +307,11 @@ async function handlePay() {
 
 .input-field:focus {
   border-color: #FFD700;
+}
+
+.input-field--active {
+  border-color: #FFD700;
+  background: rgba(255, 215, 0, 0.08);
 }
 
 .input-hint {

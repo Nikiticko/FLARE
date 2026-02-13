@@ -21,7 +21,7 @@ User = get_user_model()
 
 
 class YooKassaCreatePaymentSerializer(serializers.Serializer):
-    lessons_count = serializers.IntegerField(min_value=1)
+    lessons_count = serializers.IntegerField(min_value=1, max_value=20)
 
 
 def _get_yookassa_auth_header() -> str:
