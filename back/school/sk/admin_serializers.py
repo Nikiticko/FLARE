@@ -63,6 +63,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "student_email",
             "amount",
             "package_name",
+            "lessons_count",
             "paid_at",
             "confirmed",
         )

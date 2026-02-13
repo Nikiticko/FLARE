@@ -1,0 +1,9 @@
+import apiClient from './http'
+
+export function createYookassaPayment(payload) {
+  return apiClient.post('/payments/create/', payload)
+}
+
+export function getPaymentStatus(localPaymentId) {
+  return apiClient.get(`/payments/${localPaymentId}/status/`)
+}

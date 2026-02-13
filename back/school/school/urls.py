@@ -27,4 +27,7 @@ urlpatterns = [
     
     # API унифицированный дашборд для STUDENT и APPLICANT /api/dashboard/...
     path('api/dashboard/', include('sk.unified_api_urls')),
+
+    # API платежей ЮKassa /api/payments/...
+    path('api/payments/', include('sk.payment_api_urls')),
 ]

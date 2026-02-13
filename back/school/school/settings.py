@@ -202,6 +202,17 @@ LOGOUT_REDIRECT_URL = 'accounts:login'
 
 ROOT_ADMIN_EMAIL = os.getenv("ROOT_ADMIN_EMAIL", "admin@example.com")
 
+# Цена одного занятия (используется в расчётах оплаты)
+LESSON_PRICE_RUB = int(os.getenv("LESSON_PRICE_RUB", "1000"))
+
+# ЮKassa
+YOOKASSA_API_URL = os.getenv("YOOKASSA_API_URL", "https://api.yookassa.ru/v3")
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
+YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+YOOKASSA_RETURN_URL_SUCCESS = os.getenv("YOOKASSA_RETURN_URL_SUCCESS", "https://flare-school.ru/payment/success")
+YOOKASSA_RETURN_URL_CANCEL = os.getenv("YOOKASSA_RETURN_URL_CANCEL", "https://flare-school.ru/payment/cancel")
+YOOKASSA_VAT_CODE = int(os.getenv("YOOKASSA_VAT_CODE", "1"))
+
 # Белый список email'ов для создания админов через AdminLoginAPI
 # Первые 2 из этого списка могут стать суперпользователями
 ADMIN_SEED_EMAILS = [

@@ -8,7 +8,7 @@
           <h2 class="card-title">Калькулятор оплаты</h2>
           <div class="price-row">
             <span class="price-label">Цена за занятие</span>
-            <span class="price-value">800 ₽</span>
+            <span class="price-value">1000 ₽</span>
           </div>
         </div>
 
@@ -63,11 +63,12 @@
         <button
           type="button"
           class="pay-button"
-          :disabled="!isValid"
+          :disabled="!isValid || isSubmitting"
           @click="handlePay"
         >
-          Оплатить
+          {{ isSubmitting ? 'Переходим к оплате...' : 'Оплатить' }}
         </button>
+        <p v-if="errorText" class="pay-error">{{ errorText }}</p>
       </div>
     </div>
 
@@ -77,11 +78,16 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import Footer from '../../components/Footer.vue'
+import { createYookassaPayment } from '../../api/payments'
 
-const lessonPrice = 800
+const router = useRouter()
+const lessonPrice = 1000
 const selectedOption = ref(1)
 const customCount = ref('')
+const isSubmitting = ref(false)
+const errorText = ref('')
 
 const isCustomSelected = computed(() => selectedOption.value === 'custom')
 const parsedCustomCount = computed(() => {
@@ -120,12 +126,37 @@ function selectOption(option) {
   selectedOption.value = option
 }
 
-function handlePay() {
+async function handlePay() {
   if (!isValid.value) {
     return
   }
 
-  // Заглушка до подключения Робокассы
+  const accessToken = localStorage.getItem('access')
+  if (!accessToken) {
+    router.push({ name: 'login', query: { redirect: '/payment' } })
+    return
+  }
+
+  errorText.value = ''
+  isSubmitting.value = true
+
+  try {
+    const { data } = await createYookassaPayment({
+      lessons_count: lessonCount.value,
+    })
+
+    if (!data?.confirmation_url) {
+      throw new Error('confirmation_url is missing')
+    }
+
+    window.location.href = data.confirmation_url
+  } catch (error) {
+    errorText.value =
+      error?.response?.data?.detail ||
+      'Не удалось создать платёж. Попробуйте снова через несколько секунд.'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -305,6 +336,12 @@ function handlePay() {
   font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.6);
   text-align: center;
+}
+
+.pay-error {
+  margin: 0;
+  color: #ff8f8f;
+  font-size: 0.95rem;
 }
 
 .instruction-btn--open {

@@ -42,7 +42,7 @@ class ApplicantPaymentSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Payment
-        fields = ("id", "amount", "package_name", "paid_at", "confirmed")
+        fields = ("id", "amount", "package_name", "lessons_count", "paid_at", "confirmed")
 
 
 class ApplicantClientRequestCreateSerializer(serializers.ModelSerializer):

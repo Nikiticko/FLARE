@@ -17,6 +17,8 @@ import ManagerRequestsView from '../pages/manager/ManagerRequestsView.vue'
 import TeacherStudentsView from '../pages/teacher/TeacherStudentsView.vue'
 import TeacherScheduleView from '../pages/teacher/TeacherScheduleView.vue'
 import PaymentCalculatorView from '../pages/common/PaymentCalculatorView.vue'
+import PaymentSuccessView from '../pages/common/PaymentSuccessView.vue'
+import PaymentCancelView from '../pages/common/PaymentCancelView.vue'
 import AboutServiceView from '../pages/common/AboutServiceView.vue'
 import AboutTeacherView from '../pages/common/AboutTeacherView.vue'
 import PublicOfferView from '../pages/common/PublicOfferView.vue'
@@ -131,6 +133,18 @@ const routes = [
     meta: { guestOnly: false },
   },
   {
+    path: '/payment/success',
+    name: 'payment-success',
+    component: PaymentSuccessView,
+    meta: { guestOnly: false },
+  },
+  {
+    path: '/payment/cancel',
+    name: 'payment-cancel',
+    component: PaymentCancelView,
+    meta: { guestOnly: false },
+  },
+  {
     path: '/about',
     name: 'about-service',
     component: AboutServiceView,
@@ -182,6 +196,8 @@ const pageTitles = {
   'teacher-students': 'Ученики — Учитель — F.L.A.R.E.',
   'teacher-schedule': 'Расписание — Учитель — F.L.A.R.E.',
   'payment-calculator': 'Калькулятор оплаты — F.L.A.R.E.',
+  'payment-success': 'Оплата успешна — F.L.A.R.E.',
+  'payment-cancel': 'Оплата отменена — F.L.A.R.E.',
   'public-offer': 'Договор публичной оферты — F.L.A.R.E.',
 }
 

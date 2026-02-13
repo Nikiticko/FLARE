@@ -102,7 +102,7 @@ class StudentBalanceSerializer(serializers.ModelSerializer):
 class StudentPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
-        fields = ("id", "amount", "package_name", "paid_at", "confirmed")
+        fields = ("id", "amount", "package_name", "lessons_count", "paid_at", "confirmed")
 
 
 class StudentPaymentCreateSerializer(serializers.Serializer):

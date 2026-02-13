@@ -25,6 +25,27 @@ class Payment(models.Model):
         default=False,
         help_text="Оплата подтверждена (начислены занятия)",
     )
+    lessons_count = models.PositiveIntegerField(
+        default=0,
+        help_text="Количество купленных занятий",
+    )
+    yookassa_payment_id = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="ID платежа в ЮKassa",
+    )
+    yookassa_status = models.CharField(
+        max_length=32,
+        blank=True,
+        help_text="Текущий статус платежа в ЮKassa",
+    )
+    idempotence_key = models.CharField(
+        max_length=64,
+        blank=True,
+        db_index=True,
+        help_text="Ключ идемпотентности запроса в ЮKassa",
+    )
 
     def __str__(self):
         return f"Payment(id={self.id}, student={self.student}, amount={self.amount}, confirmed={self.confirmed})"
