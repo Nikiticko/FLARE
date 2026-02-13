@@ -262,3 +262,27 @@ class ClientRequest(models.Model):
 
     def __str__(self):
         return f"ClientRequest(id={self.id}, client={self.client.email}, status={self.status})"
+
+
+class PaymentSettings(models.Model):
+    """
+    Глобальные настройки оплаты (singleton).
+    """
+    singleton_key = models.PositiveSmallIntegerField(default=1, unique=True, editable=False)
+    lesson_price_rub = models.PositiveIntegerField(default=1000)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        self.singleton_key = 1
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"PaymentSettings(price={self.lesson_price_rub})"
+
+
+def get_current_lesson_price_rub(default_price=1000):
+    settings_obj, _ = PaymentSettings.objects.get_or_create(singleton_key=1)
+    if settings_obj.lesson_price_rub <= 0:
+        settings_obj.lesson_price_rub = default_price
+        settings_obj.save(update_fields=["lesson_price_rub", "updated_at"])
+    return settings_obj.lesson_price_rub

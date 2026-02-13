@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.permissions import IsAdminRole
-from .models import Payment, Lesson, LessonBalance, AuditLog, Course
+from .models import Payment, Lesson, LessonBalance, AuditLog, Course, PaymentSettings
 from .admin_serializers import (
     AdminUserListSerializer,
     AdminUserDetailSerializer,
@@ -20,6 +20,8 @@ from .admin_serializers import (
     AuditLogSerializer,
     CourseSerializer,
     CourseCreateUpdateSerializer,
+    PaymentSettingsSerializer,
+    PaymentSettingsUpdateSerializer,
 )
 
 User = get_user_model()
@@ -464,3 +466,38 @@ class AdminCourseDetailAPI(generics.RetrieveUpdateDestroyAPIView):
         # Возвращаем полные данные курса
         full_serializer = CourseSerializer(instance)
         return Response(full_serializer.data)
+
+
+class AdminLessonPriceAPI(APIView):
+    """
+    Управление стоимостью одного занятия.
+    GET /api/admin/settings/lesson-price/
+    PATCH /api/admin/settings/lesson-price/ {"lesson_price_rub": 1200}
+    """
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        settings_obj, _ = PaymentSettings.objects.get_or_create(singleton_key=1)
+        return Response(PaymentSettingsSerializer(settings_obj).data)
+
+    def patch(self, request):
+        settings_obj, _ = PaymentSettings.objects.get_or_create(singleton_key=1)
+        serializer = PaymentSettingsUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        old_price = settings_obj.lesson_price_rub
+        new_price = serializer.validated_data["lesson_price_rub"]
+
+        settings_obj.lesson_price_rub = new_price
+        settings_obj.save(update_fields=["lesson_price_rub", "updated_at"])
+
+        AuditLog.objects.create(
+            actor=request.user,
+            action="UPDATE_LESSON_PRICE",
+            meta={
+                "old_price": old_price,
+                "new_price": new_price,
+            },
+        )
+
+        return Response(PaymentSettingsSerializer(settings_obj).data)

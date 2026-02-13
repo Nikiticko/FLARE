@@ -202,9 +202,6 @@ LOGOUT_REDIRECT_URL = 'accounts:login'
 
 ROOT_ADMIN_EMAIL = os.getenv("ROOT_ADMIN_EMAIL", "admin@example.com")
 
-# Цена одного занятия (используется в расчётах оплаты)
-LESSON_PRICE_RUB = int(os.getenv("LESSON_PRICE_RUB", "1000"))
-
 # ЮKassa
 YOOKASSA_API_URL = os.getenv("YOOKASSA_API_URL", "https://api.yookassa.ru/v3")
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")

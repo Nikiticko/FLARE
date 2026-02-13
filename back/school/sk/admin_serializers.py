@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Payment, Lesson, LessonBalance, AuditLog, Course
+from .models import Payment, Lesson, LessonBalance, AuditLog, Course, PaymentSettings
 
 User = get_user_model()
 
@@ -283,3 +283,13 @@ class CourseCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
         fields = ("title", "description")
+
+
+class PaymentSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentSettings
+        fields = ("lesson_price_rub", "updated_at")
+
+
+class PaymentSettingsUpdateSerializer(serializers.Serializer):
+    lesson_price_rub = serializers.IntegerField(min_value=1, max_value=100000)

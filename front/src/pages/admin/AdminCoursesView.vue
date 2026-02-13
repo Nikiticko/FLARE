@@ -8,6 +8,41 @@
           <p class="subtitle">Создание и редактирование курсов</p>
         </div>
       </div>
+      <div class="admin-grid">
+      <section class="admin-card price-card">
+        <div class="section-header">
+          <div class="section-title-group">
+            <div class="section-icon">💳</div>
+            <h2>Стоимость занятия</h2>
+          </div>
+        </div>
+
+        <p v-if="priceLoading" class="status-text">Загружаем текущую стоимость...</p>
+        <p v-if="priceError" class="error">{{ priceError }}</p>
+
+        <form v-if="!priceLoading" @submit.prevent="saveLessonPrice" class="price-form">
+          <label class="field">
+            <span>Стоимость одного занятия (₽)</span>
+            <input
+              v-model.number="lessonPriceForm"
+              type="number"
+              min="1"
+              max="100000"
+              step="1"
+              required
+            />
+          </label>
+
+          <p class="price-hint">Изменение применяется ко всем новым оплатам сразу после сохранения.</p>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary" :disabled="priceSaving">
+              {{ priceSaving ? 'Сохраняем...' : 'Сохранить стоимость' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
       <!-- Список курсов -->
       <section class="admin-card">
         <div class="section-header">
@@ -47,6 +82,7 @@
           Курсов пока нет. Создайте первый курс.
         </p>
       </section>
+      </div>
 
       <!-- Окно редактирования курса (поверх интерфейса) -->
       <div v-if="showCourseForm" class="course-form-overlay" @click.self="closeCourseForm">
@@ -90,6 +126,8 @@ import {
   adminCreateCourse,
   adminUpdateCourse,
   adminDeleteCourse,
+  adminGetLessonPrice,
+  adminUpdateLessonPrice,
 } from '../../api/admin'
 
 const auth = useAuthStore()
@@ -99,6 +137,10 @@ const courses = ref([])
 const loading = ref(false)
 const error = ref(null)
 const saving = ref(false)
+const priceLoading = ref(false)
+const priceSaving = ref(false)
+const priceError = ref(null)
+const lessonPriceForm = ref(1000)
 
 // Форма (inline)
 const showCourseForm = ref(false)
@@ -176,11 +218,51 @@ const deleteCourse = async (id) => {
   }
 }
 
+const loadLessonPrice = async () => {
+  priceLoading.value = true
+  priceError.value = null
+  try {
+    const { data } = await adminGetLessonPrice()
+    lessonPriceForm.value = Number(data?.lesson_price_rub || 1000)
+  } catch (err) {
+    console.error('Ошибка загрузки стоимости занятия:', err)
+    priceError.value = 'Ошибка загрузки стоимости занятия'
+  } finally {
+    priceLoading.value = false
+  }
+}
+
+const saveLessonPrice = async () => {
+  const value = Number(lessonPriceForm.value)
+  if (!Number.isInteger(value) || value <= 0) {
+    alert('Введите корректную стоимость (целое число больше 0).')
+    return
+  }
+
+  const confirmed = confirm(`Подтвердите изменение стоимости занятия на ${value} ₽`)
+  if (!confirmed) {
+    return
+  }
+
+  priceSaving.value = true
+  priceError.value = null
+  try {
+    await adminUpdateLessonPrice(value)
+    await loadLessonPrice()
+  } catch (err) {
+    console.error('Ошибка сохранения стоимости занятия:', err)
+    priceError.value = err?.response?.data?.detail || 'Ошибка сохранения стоимости занятия'
+  } finally {
+    priceSaving.value = false
+  }
+}
+
 onMounted(() => {
   if (!auth.isAuthenticated) {
     router.push({ name: 'login' })
     return
   }
+  loadLessonPrice()
   loadCourses()
 })
 </script>
@@ -236,6 +318,29 @@ onMounted(() => {
   gap: 20px;
   flex: 1;
   overflow-y: auto;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 380px) 1fr;
+  gap: 20px;
+}
+
+.price-card {
+  align-self: start;
+}
+
+.price-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.price-hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .admin-card {
@@ -578,6 +683,10 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+
   .section-header {
     flex-direction: column;
     align-items: flex-start;

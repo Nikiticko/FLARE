@@ -14,6 +14,7 @@ from .admin_api_views import (
     AdminAuditLogListAPI,
     AdminCourseListCreateAPI,
     AdminCourseDetailAPI,
+    AdminLessonPriceAPI,
 )
 
 urlpatterns = [
@@ -40,4 +41,7 @@ urlpatterns = [
     # COURSES
     path("courses/", AdminCourseListCreateAPI.as_view()),                   # GET список / POST создать
     path("courses/<int:pk>/", AdminCourseDetailAPI.as_view()),             # GET/PATCH/DELETE
+
+    # SETTINGS
+    path("settings/lesson-price/", AdminLessonPriceAPI.as_view()),
 ]

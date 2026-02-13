@@ -14,7 +14,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import AuditLog, LessonBalance, Payment
+from .models import AuditLog, LessonBalance, Payment, get_current_lesson_price_rub
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -81,7 +81,7 @@ class YooKassaCreatePaymentAPI(APIView):
         serializer.is_valid(raise_exception=True)
 
         lessons_count = serializer.validated_data["lessons_count"]
-        lesson_price = Decimal(str(getattr(settings, "LESSON_PRICE_RUB", 1000)))
+        lesson_price = Decimal(str(get_current_lesson_price_rub(default_price=1000)))
         amount = lesson_price * Decimal(lessons_count)
         amount_value = f"{amount:.2f}"
 
@@ -210,6 +210,19 @@ class YooKassaPaymentStatusAPI(APIView):
         )
 
 
+class PaymentPublicConfigAPI(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        lesson_price_rub = get_current_lesson_price_rub(default_price=1000)
+        return Response(
+            {
+                "lesson_price_rub": lesson_price_rub,
+                "max_lessons_per_payment": 20,
+            }
+        )
+
+
 class YooKassaWebhookAPI(APIView):
     permission_classes = [AllowAny]
 
@@ -256,7 +269,7 @@ class YooKassaWebhookAPI(APIView):
 
         lessons_to_add = payment.lessons_count
         if lessons_to_add <= 0:
-            lesson_price = Decimal(str(getattr(settings, "LESSON_PRICE_RUB", 1000)))
+            lesson_price = Decimal(str(get_current_lesson_price_rub(default_price=1000)))
             lessons_to_add = int(payment.amount / lesson_price)
 
         lb, _ = LessonBalance.objects.select_for_update().get_or_create(student=payment.student)

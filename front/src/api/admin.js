@@ -72,3 +72,15 @@ export function adminUpdateCourse(id, payload) {
 export function adminDeleteCourse(id) {
   return apiClient.delete(`/admin/courses/${id}/`)
 }
+
+// ===== SETTINGS =====
+
+// получить текущую стоимость одного занятия
+export function adminGetLessonPrice() {
+  return apiClient.get('/admin/settings/lesson-price/')
+}
+
+// обновить стоимость одного занятия
+export function adminUpdateLessonPrice(lessonPriceRub) {
+  return apiClient.patch('/admin/settings/lesson-price/', { lesson_price_rub: lessonPriceRub })
+}

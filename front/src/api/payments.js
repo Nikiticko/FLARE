@@ -1,5 +1,9 @@
 import apiClient from './http'
 
+export function getPublicPaymentConfig() {
+  return apiClient.get('/payments/config/')
+}
+
 export function createYookassaPayment(payload) {
   return apiClient.post('/payments/create/', payload)
 }

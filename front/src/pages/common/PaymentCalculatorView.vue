@@ -8,7 +8,7 @@
           <h2 class="card-title">Калькулятор оплаты</h2>
           <div class="price-row">
             <span class="price-label">Цена за занятие</span>
-            <span class="price-value">1000 ₽</span>
+            <span class="price-value">{{ lessonPrice }} ₽</span>
           </div>
         </div>
 
@@ -49,11 +49,11 @@
             type="number"
             inputmode="numeric"
             min="1"
-            max="20"
+            :max="maxLessonsPerPayment"
             step="1"
             placeholder="Введите количество занятий"
           />
-          <p class="input-hint">Только целое число от 1 до 20</p>
+          <p class="input-hint">Только целое число от 1 до {{ maxLessonsPerPayment }}</p>
         </div>
 
         <div class="total-row">
@@ -78,13 +78,14 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Footer from '../../components/Footer.vue'
-import { createYookassaPayment } from '../../api/payments'
+import { createYookassaPayment, getPublicPaymentConfig } from '../../api/payments'
 
 const router = useRouter()
-const lessonPrice = 1000
+const lessonPrice = ref(1000)
+const maxLessonsPerPayment = ref(20)
 const selectedOption = ref(1)
 const lastPresetOption = ref(1)
 const customCount = ref('')
@@ -103,7 +104,7 @@ const parsedCustomCount = computed(() => {
   }
 
   const parsed = Number.parseInt(value, 10)
-  return parsed > 0 && parsed <= 20 ? parsed : null
+  return parsed > 0 && parsed <= maxLessonsPerPayment.value ? parsed : null
 })
 
 const lessonCount = computed(() => {
@@ -121,8 +122,18 @@ const totalAmount = computed(() => {
     return 0
   }
 
-  return lessonCount.value * lessonPrice
+  return lessonCount.value * lessonPrice.value
 })
+
+async function loadPaymentConfig() {
+  try {
+    const { data } = await getPublicPaymentConfig()
+    lessonPrice.value = Number(data?.lesson_price_rub || 1000)
+    maxLessonsPerPayment.value = Number(data?.max_lessons_per_payment || 20)
+  } catch (error) {
+    console.error('Не удалось загрузить конфигурацию оплаты:', error)
+  }
+}
 
 function selectOption(option) {
   if (option === 'custom') {
@@ -178,6 +189,10 @@ async function handlePay() {
     isSubmitting.value = false
   }
 }
+
+onMounted(() => {
+  loadPaymentConfig()
+})
 </script>
 
 <style scoped>
