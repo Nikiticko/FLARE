@@ -97,6 +97,7 @@ class YooKassaCreatePaymentAPI(APIView):
         idempotence_key = str(uuid.uuid4())
         success_url = getattr(settings, "YOOKASSA_RETURN_URL_SUCCESS", "https://flare-school.ru/payment/success")
         return_url = _append_query_param(success_url, "local_payment_id", str(payment.id))
+        return_url = _append_query_param(return_url, "status_token", idempotence_key)
 
         vat_code = int(getattr(settings, "YOOKASSA_VAT_CODE", 1))
         customer_email = (getattr(user, "email", "") or "").strip()
@@ -183,7 +184,7 @@ class YooKassaCreatePaymentAPI(APIView):
 
 
 class YooKassaPaymentStatusAPI(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, pk):
         try:
@@ -191,7 +192,22 @@ class YooKassaPaymentStatusAPI(APIView):
         except Payment.DoesNotExist:
             return Response({"detail": "payment not found"}, status=404)
 
+        status_token = (request.query_params.get("status_token") or "").strip()
+        if status_token and status_token == (payment.idempotence_key or ""):
+            return Response(
+                {
+                    "id": payment.id,
+                    "confirmed": payment.confirmed,
+                    "status": payment.yookassa_status,
+                    "amount": str(payment.amount),
+                    "lessons_count": payment.lessons_count,
+                }
+            )
+
         user = request.user
+        if not (user and user.is_authenticated):
+            return Response({"detail": "authentication required"}, status=401)
+
         privileged_roles = (User.Roles.ADMIN, User.Roles.MANAGER)
         is_owner = payment.student_id == user.id
         is_privileged = getattr(user, "role", "") in privileged_roles or user.is_superuser

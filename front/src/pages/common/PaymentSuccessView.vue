@@ -21,6 +21,7 @@ const status = ref('pending')
 const statusError = ref('')
 
 const localPaymentId = computed(() => route.query.local_payment_id || null)
+const statusToken = computed(() => route.query.status_token || null)
 
 const statusText = computed(() => {
   if (statusError.value) {
@@ -46,7 +47,7 @@ async function checkStatus() {
   }
 
   try {
-    const { data } = await getPaymentStatus(localPaymentId.value)
+    const { data } = await getPaymentStatus(localPaymentId.value, statusToken.value)
     status.value = (data?.status || 'pending').toLowerCase()
 
     if (status.value === 'succeeded') {
