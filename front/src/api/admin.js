@@ -50,8 +50,8 @@ export function adminGetBackendLogs(params = {}) {
   return apiClient.get('/admin/backend-logs/', { params })
 }
 
-export function adminClearBackendLogs() {
-  return apiClient.post('/admin/backend-logs/clear/')
+export function adminClearBackendLogs(mode = 'soft') {
+  return apiClient.post('/admin/backend-logs/clear/', { mode })
 }
 
 // ===== COURSES =====

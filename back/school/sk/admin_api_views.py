@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.conf import settings
 from pathlib import Path
+import os
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -48,6 +49,30 @@ def _parse_backend_log_line(line):
         'message': raw,
         'raw': raw,
     }
+
+
+def _tail_lines(file_path, max_lines):
+    if max_lines <= 0:
+        return []
+
+    chunk_size = 4096
+    collected = b''
+    lines = []
+
+    with file_path.open('rb') as file_obj:
+        file_obj.seek(0, os.SEEK_END)
+        position = file_obj.tell()
+
+        while position > 0 and len(lines) <= max_lines:
+            read_size = min(chunk_size, position)
+            position -= read_size
+            file_obj.seek(position)
+            chunk = file_obj.read(read_size)
+            collected = chunk + collected
+            lines = collected.splitlines()
+
+    decoded = [line.decode('utf-8', errors='replace') for line in lines[-max_lines:]]
+    return decoded
 
 
 # ======= USERS =======
@@ -468,9 +493,9 @@ class AdminBackendLogListAPI(APIView):
             if not file_path.is_file():
                 continue
 
+            remaining = limit - len(entries)
             try:
-                with file_path.open('r', encoding='utf-8', errors='replace') as file_obj:
-                    lines = file_obj.readlines()
+                lines = _tail_lines(file_path, max_lines=max(remaining * 5, 500))
             except OSError:
                 continue
 
@@ -494,12 +519,20 @@ class AdminBackendLogClearAPI(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request):
+        mode = str(request.data.get('mode', 'soft')).strip().lower()
+        if mode not in ('soft', 'full'):
+            mode = 'soft'
+
         log_dir = Path(settings.LOG_DIR)
 
         truncated = []
         removed = []
 
-        for base_name in ('backend.log', 'backend_errors.log'):
+        target_files = ('backend.log',)
+        if mode == 'full':
+            target_files = ('backend.log', 'backend_errors.log')
+
+        for base_name in target_files:
             file_path = log_dir / base_name
             try:
                 file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -516,8 +549,20 @@ class AdminBackendLogClearAPI(APIView):
                 except OSError:
                     continue
 
+        AuditLog.objects.create(
+            actor=request.user,
+            action="CLEAR_BACKEND_LOGS",
+            meta={
+                "mode": mode,
+                "truncated": truncated,
+                "removed_count": len(removed),
+                "removed": removed,
+            },
+        )
+
         return Response({
             'detail': 'backend logs cleared',
+            'mode': mode,
             'truncated': truncated,
             'removed': removed,
         })

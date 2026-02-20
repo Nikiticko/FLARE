@@ -377,13 +377,16 @@ const levelClass = (level) => {
 }
 
 const clearBackendLogs = async () => {
-  const isConfirmed = window.confirm('Очистить backend-логи? Это удалит текущие и архивные log-файлы.')
+  const isConfirmed = window.confirm('Очистить backend-логи? По умолчанию очистятся обычные логи без ошибок (soft).')
   if (!isConfirmed) return
+
+  const fullClear = window.confirm('Нужна полная очистка? OK = удалить также error-логи и архивы, Отмена = только обычные логи.')
+  const mode = fullClear ? 'full' : 'soft'
 
   backendLoading.value = true
   backendError.value = null
   try {
-    await adminClearBackendLogs()
+    await adminClearBackendLogs(mode)
     backendLogs.value = []
     await loadBackendLogs()
   } catch (err) {
