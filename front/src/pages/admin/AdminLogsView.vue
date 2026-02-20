@@ -71,7 +71,7 @@
                 <span class="label-icon">📊</span>
                 <span>Сортировка</span>
               </label>
-              <select v-model="ordering" @change="loadLogs" class="filter-select">
+              <select v-model="ordering" class="filter-select">
                 <option value="-created_at">Новые сверху</option>
                 <option value="created_at">Старые сверху</option>
               </select>
@@ -107,11 +107,6 @@
               </div>
             </div>
 
-            <div class="filter-group filter-actions">
-              <button class="btn primary" @click="refreshCurrentTab" :disabled="isCurrentLoading">
-                {{ isCurrentLoading ? '⏳ Обновляем...' : '🔄 Обновить' }}
-              </button>
-            </div>
           </div>
 
           <div class="hint-box">
@@ -216,7 +211,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { adminGetAuditLogs, adminGetBackendLogs } from '../../api/admin'
@@ -241,7 +236,8 @@ const backendLimit = ref(500)
 const backendLevelOptions = ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'CRITICAL']
 const backendSelectedLevels = ref(['ERROR', 'WARNING'])
 
-const isCurrentLoading = computed(() => activeTab.value === 'audit' ? loading.value : backendLoading.value)
+let autoRefreshTimer = null
+let searchDebounceTimer = null
 
 // загрузка логов с бэка
 const loadLogs = async () => {
@@ -348,6 +344,23 @@ const refreshCurrentTab = () => {
   loadBackendLogs()
 }
 
+const runAutoRefresh = () => {
+  if (document.visibilityState === 'hidden') return
+  if (loading.value || backendLoading.value) return
+  refreshCurrentTab()
+}
+
+const startAutoRefresh = () => {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
+  autoRefreshTimer = setInterval(runAutoRefresh, 15000)
+}
+
+const stopAutoRefresh = () => {
+  if (!autoRefreshTimer) return
+  clearInterval(autoRefreshTimer)
+  autoRefreshTimer = null
+}
+
 const levelClass = (level) => {
   const upper = (level || '').toUpperCase()
   if (upper === 'ERROR' || upper === 'CRITICAL') return 'is-error'
@@ -363,14 +376,54 @@ onMounted(() => {
     router.push({ name: 'login' })
   } else {
     loadLogs()
+    startAutoRefresh()
+  }
+})
+
+onUnmounted(() => {
+  stopAutoRefresh()
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer)
+    searchDebounceTimer = null
   }
 })
 
 watch(activeTab, (tab) => {
-  if (tab === 'backend' && !backendLogs.value.length) {
+  if (tab === 'backend') {
+    loadBackendLogs()
+    return
+  }
+
+  loadLogs()
+})
+
+watch(ordering, () => {
+  if (activeTab.value === 'audit') {
+    loadLogs()
+  }
+})
+
+watch(searchQuery, () => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  searchDebounceTimer = setTimeout(() => {
+    refreshCurrentTab()
+  }, 450)
+})
+
+watch(backendLimit, () => {
+  if (activeTab.value === 'backend') {
     loadBackendLogs()
   }
 })
+
+watch(
+  () => backendSelectedLevels.value.join(','),
+  () => {
+    if (activeTab.value === 'backend') {
+      loadBackendLogs()
+    }
+  }
+)
 
 // Если меняем строку поиска — просто не автоматически дергаем бэкенд каждую букву.
 // Можно сделать debounce, но пока — ручная кнопка "Обновить".
@@ -580,12 +633,6 @@ watch(activeTab, (tab) => {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-}
-
-.filter-group.filter-actions {
-  display: flex;
-  flex-direction: row;
-  align-items: flex-end;
 }
 
 .tabs-card {
