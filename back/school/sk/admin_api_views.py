@@ -490,6 +490,39 @@ class AdminBackendLogListAPI(APIView):
         return Response({'count': len(entries), 'results': entries})
 
 
+class AdminBackendLogClearAPI(APIView):
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def post(self, request):
+        log_dir = Path(settings.LOG_DIR)
+
+        truncated = []
+        removed = []
+
+        for base_name in ('backend.log', 'backend_errors.log'):
+            file_path = log_dir / base_name
+            try:
+                file_path.parent.mkdir(parents=True, exist_ok=True)
+                file_path.open('w', encoding='utf-8').close()
+                truncated.append(base_name)
+            except OSError:
+                continue
+
+            rotated_files = sorted(log_dir.glob(f'{base_name}.*'))
+            for rotated in rotated_files:
+                try:
+                    rotated.unlink(missing_ok=True)
+                    removed.append(rotated.name)
+                except OSError:
+                    continue
+
+        return Response({
+            'detail': 'backend logs cleared',
+            'truncated': truncated,
+            'removed': removed,
+        })
+
+
 # ======= COURSES =======
 
 

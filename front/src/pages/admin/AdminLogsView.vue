@@ -90,6 +90,12 @@
               </select>
             </div>
 
+            <div v-if="activeTab === 'backend'" class="filter-group filter-actions-right">
+              <button class="btn danger" @click="clearBackendLogs" :disabled="backendLoading">
+                🧹 Очистить логи
+              </button>
+            </div>
+
             <div v-if="activeTab === 'backend'" class="filter-group full-width">
               <label class="form-label">
                 <span class="label-icon">✅</span>
@@ -214,7 +220,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { adminGetAuditLogs, adminGetBackendLogs } from '../../api/admin'
+import { adminGetAuditLogs, adminGetBackendLogs, adminClearBackendLogs } from '../../api/admin'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -368,6 +374,24 @@ const levelClass = (level) => {
   if (upper === 'INFO') return 'is-info'
   if (upper === 'DEBUG') return 'is-debug'
   return ''
+}
+
+const clearBackendLogs = async () => {
+  const isConfirmed = window.confirm('Очистить backend-логи? Это удалит текущие и архивные log-файлы.')
+  if (!isConfirmed) return
+
+  backendLoading.value = true
+  backendError.value = null
+  try {
+    await adminClearBackendLogs()
+    backendLogs.value = []
+    await loadBackendLogs()
+  } catch (err) {
+    console.error('Ошибка очистки backend-логов:', err)
+    backendError.value = err?.response?.data?.detail || 'Не удалось очистить backend-логи.'
+  } finally {
+    backendLoading.value = false
+  }
 }
 
 // При первом заходе: проверяем auth и грузим логи
@@ -659,6 +683,11 @@ watch(
   background: #FFD700;
   color: #1A1A1A;
   border-color: #FFD700;
+}
+
+.filter-actions-right {
+  justify-content: flex-end;
+  align-self: end;
 }
 
 .full-width {
@@ -1055,7 +1084,7 @@ watch(
     gap: 16px;
   }
 
-  .filter-group.filter-actions {
+  .filter-group.filter-actions-right {
     flex-direction: column;
     align-items: stretch;
   }

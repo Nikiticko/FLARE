@@ -13,6 +13,7 @@ from .admin_api_views import (
     AdminLessonDebitAPI,
     AdminAuditLogListAPI,
     AdminBackendLogListAPI,
+    AdminBackendLogClearAPI,
     AdminCourseListCreateAPI,
     AdminCourseDetailAPI,
     AdminLessonPriceAPI,
@@ -39,6 +40,7 @@ urlpatterns = [
     # AUDIT LOG
     path("audit/", AdminAuditLogListAPI.as_view()),                         # GET (search/order)
     path("backend-logs/", AdminBackendLogListAPI.as_view()),                # GET (levels/search/limit)
+    path("backend-logs/clear/", AdminBackendLogClearAPI.as_view()),         # POST очистка backend логов
 
     # COURSES
     path("courses/", AdminCourseListCreateAPI.as_view()),                   # GET список / POST создать
