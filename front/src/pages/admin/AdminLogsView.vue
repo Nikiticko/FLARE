@@ -5,9 +5,28 @@
       <div class="page-header">
         <div class="title-block">
           <h1 class="page-title">📋 Система логов</h1>
-          <p class="subtitle">История всех действий в системе</p>
+          <p class="subtitle">Аудит действий и backend-логирование</p>
         </div>
       </div>
+
+      <section class="admin-card tabs-card">
+        <div class="tabs-row">
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'audit' }"
+            @click="switchTab('audit')"
+          >
+            История действий
+          </button>
+          <button
+            class="tab-btn"
+            :class="{ active: activeTab === 'backend' }"
+            @click="switchTab('backend')"
+          >
+            Backend-логи
+          </button>
+        </div>
+      </section>
 
       <section class="admin-card filters-card">
         <div class="card-header">
@@ -23,14 +42,14 @@
                 <span>Поиск</span>
               </label>
               <input
-                v-model="search"
+                v-model="searchQuery"
                 type="text"
-                placeholder="Email пользователя, тип действия..."
+                :placeholder="activeTab === 'audit' ? 'Email пользователя, тип действия...' : 'Текст ошибки, logger, сообщение...'"
                 class="filter-input"
               />
             </div>
 
-            <div class="filter-group">
+            <div v-if="activeTab === 'audit'" class="filter-group">
               <label class="form-label">
                 <span class="label-icon">⚡</span>
                 <span>Тип действия</span>
@@ -47,7 +66,7 @@
               </select>
             </div>
 
-            <div class="filter-group">
+            <div v-if="activeTab === 'audit'" class="filter-group">
               <label class="form-label">
                 <span class="label-icon">📊</span>
                 <span>Сортировка</span>
@@ -58,24 +77,58 @@
               </select>
             </div>
 
+            <div v-if="activeTab === 'backend'" class="filter-group">
+              <label class="form-label">
+                <span class="label-icon">🧰</span>
+                <span>Лимит строк</span>
+              </label>
+              <select v-model.number="backendLimit" class="filter-select">
+                <option :value="200">200</option>
+                <option :value="500">500</option>
+                <option :value="1000">1000</option>
+                <option :value="2000">2000</option>
+              </select>
+            </div>
+
+            <div v-if="activeTab === 'backend'" class="filter-group full-width">
+              <label class="form-label">
+                <span class="label-icon">✅</span>
+                <span>Уровни логов</span>
+              </label>
+              <div class="levels-grid">
+                <label v-for="level in backendLevelOptions" :key="level" class="level-checkbox">
+                  <input
+                    type="checkbox"
+                    :value="level"
+                    v-model="backendSelectedLevels"
+                  />
+                  <span>{{ level }}</span>
+                </label>
+              </div>
+            </div>
+
             <div class="filter-group filter-actions">
-              <button class="btn primary" @click="loadLogs" :disabled="loading">
-                {{ loading ? '⏳ Обновляем...' : '🔄 Обновить' }}
+              <button class="btn primary" @click="refreshCurrentTab" :disabled="isCurrentLoading">
+                {{ isCurrentLoading ? '⏳ Обновляем...' : '🔄 Обновить' }}
               </button>
             </div>
           </div>
 
           <div class="hint-box">
-            <p class="hint">
+            <p v-if="activeTab === 'audit'" class="hint">
               <strong>💡 Подсказка:</strong> Лог фиксирует: создание/изменение/удаление пользователей, уроков,
               подтверждение оплат и другие важные действия. Поле
               <strong>actor_email</strong> — это кто именно сделал действие.
+            </p>
+            <p v-else class="hint">
+              <strong>💡 Подсказка:</strong> Backend-логи выводятся компактно и поддерживают фильтр по уровням
+              <strong>ERROR/WARNING/INFO/DEBUG/CRITICAL</strong>.
             </p>
           </div>
         </div>
       </section>
 
-      <section class="admin-card logs-card">
+      <section v-if="activeTab === 'audit'" class="admin-card logs-card">
         <div class="card-header">
           <div class="card-icon">📜</div>
           <h2 class="card-title">История действий</h2>
@@ -128,6 +181,36 @@
           <p>Логи не найдены (по текущим фильтрам).</p>
         </div>
       </section>
+
+      <section v-else class="admin-card logs-card">
+        <div class="card-header">
+          <div class="card-icon">🧾</div>
+          <h2 class="card-title">Backend-логирование</h2>
+        </div>
+
+        <div v-if="backendError" class="error-message">
+          <span class="error-icon">⚠️</span>
+          <span>{{ backendError }}</span>
+        </div>
+
+        <div v-if="backendLoading" class="loading-state">
+          <div class="spinner"></div>
+          <p>Загружаем backend-логи...</p>
+        </div>
+
+        <div v-if="!backendLoading && backendLogs.length" class="backend-log-window">
+          <div v-for="(entry, index) in backendLogs" :key="entry.raw + index" class="backend-log-row">
+            <span class="backend-ts">{{ entry.timestamp || '—' }}</span>
+            <span class="backend-level" :class="levelClass(entry.level)">{{ entry.level || 'UNKNOWN' }}</span>
+            <span class="backend-logger">{{ entry.logger || 'system' }}</span>
+            <span class="backend-message">{{ entry.message }}</span>
+          </div>
+        </div>
+
+        <div v-else-if="!backendLoading && !backendLogs.length" class="empty-state">
+          <p>Backend-логи не найдены (по текущим фильтрам).</p>
+        </div>
+      </section>
     </main>
   </div>
 </template>
@@ -136,7 +219,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
-import { adminGetAuditLogs } from '../../api/admin'
+import { adminGetAuditLogs, adminGetBackendLogs } from '../../api/admin'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -145,9 +228,20 @@ const logs = ref([])
 const loading = ref(false)
 const error = ref(null)
 
-const search = ref('')
+const activeTab = ref('audit')
+
+const searchQuery = ref('')
 const actionFilter = ref('')
 const ordering = ref('-created_at')
+
+const backendLogs = ref([])
+const backendLoading = ref(false)
+const backendError = ref(null)
+const backendLimit = ref(500)
+const backendLevelOptions = ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'CRITICAL']
+const backendSelectedLevels = ref(['ERROR', 'WARNING'])
+
+const isCurrentLoading = computed(() => activeTab.value === 'audit' ? loading.value : backendLoading.value)
 
 // загрузка логов с бэка
 const loadLogs = async () => {
@@ -158,8 +252,8 @@ const loadLogs = async () => {
     const params = {
       ordering: ordering.value,
     }
-    if (search.value) {
-      params.search = search.value
+    if (searchQuery.value) {
+      params.search = searchQuery.value
     }
 
     const { data } = await adminGetAuditLogs(params)
@@ -172,6 +266,35 @@ const loadLogs = async () => {
       'Не удалось загрузить логи. Проверьте права и токен.'
   } finally {
     loading.value = false
+  }
+}
+
+const loadBackendLogs = async () => {
+  backendLoading.value = true
+  backendError.value = null
+
+  try {
+    const params = {
+      limit: backendLimit.value,
+    }
+
+    if (searchQuery.value) {
+      params.search = searchQuery.value
+    }
+
+    if (backendSelectedLevels.value.length) {
+      params.levels = backendSelectedLevels.value.join(',')
+    }
+
+    const { data } = await adminGetBackendLogs(params)
+    backendLogs.value = Array.isArray(data) ? data : data.results || []
+  } catch (err) {
+    console.error('Ошибка загрузки backend-логов:', err)
+    backendError.value =
+      err?.response?.data?.detail ||
+      'Не удалось загрузить backend-логи.'
+  } finally {
+    backendLoading.value = false
   }
 }
 
@@ -213,8 +336,25 @@ const prettyMeta = (meta) => {
   }
 }
 
-const goDashboard = () => {
-  router.push({ name: 'admin-dashboard' })
+const switchTab = (tab) => {
+  activeTab.value = tab
+}
+
+const refreshCurrentTab = () => {
+  if (activeTab.value === 'audit') {
+    loadLogs()
+    return
+  }
+  loadBackendLogs()
+}
+
+const levelClass = (level) => {
+  const upper = (level || '').toUpperCase()
+  if (upper === 'ERROR' || upper === 'CRITICAL') return 'is-error'
+  if (upper === 'WARNING') return 'is-warning'
+  if (upper === 'INFO') return 'is-info'
+  if (upper === 'DEBUG') return 'is-debug'
+  return ''
 }
 
 // При первом заходе: проверяем auth и грузим логи
@@ -223,6 +363,12 @@ onMounted(() => {
     router.push({ name: 'login' })
   } else {
     loadLogs()
+  }
+})
+
+watch(activeTab, (tab) => {
+  if (tab === 'backend' && !backendLogs.value.length) {
+    loadBackendLogs()
   }
 })
 
@@ -440,6 +586,102 @@ onMounted(() => {
   display: flex;
   flex-direction: row;
   align-items: flex-end;
+}
+
+.tabs-card {
+  padding: 12px 16px;
+}
+
+.tabs-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tab-btn {
+  border: 2px solid rgba(255, 215, 0, 0.35);
+  background: rgba(35, 35, 35, 0.9);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.tab-btn.active {
+  background: #FFD700;
+  color: #1A1A1A;
+  border-color: #FFD700;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.levels-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.level-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.backend-log-window {
+  max-height: 65vh;
+  overflow: auto;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 8px;
+  background: rgba(18, 18, 18, 0.9);
+}
+
+.backend-log-row {
+  display: grid;
+  grid-template-columns: 170px 100px 220px 1fr;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.backend-ts,
+.backend-logger {
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.backend-level {
+  font-weight: 700;
+}
+
+.backend-message {
+  color: rgba(255, 255, 255, 0.95);
+  word-break: break-word;
+}
+
+.backend-level.is-error {
+  color: #ff7d7d;
+}
+
+.backend-level.is-warning {
+  color: #ffcf66;
+}
+
+.backend-level.is-info {
+  color: #8ed7ff;
+}
+
+.backend-level.is-debug {
+  color: #b9a7ff;
 }
 
 .form-label {

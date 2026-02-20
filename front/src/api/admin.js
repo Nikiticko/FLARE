@@ -46,6 +46,10 @@ export function adminGetAuditLogs(params = {}) {
   return apiClient.get('/admin/audit/', { params })
 }
 
+export function adminGetBackendLogs(params = {}) {
+  return apiClient.get('/admin/backend-logs/', { params })
+}
+
 // ===== COURSES =====
 
 // получить список курсов

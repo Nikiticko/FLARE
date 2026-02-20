@@ -223,3 +223,56 @@ ADMIN_SEED_EMAILS = [
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'backend': {
+            'format': '%(asctime)s|%(levelname)s|%(name)s|%(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
+    'handlers': {
+        'backend_file': {
+            'level': 'INFO',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': str(LOG_DIR / 'backend.log'),
+            'when': 'midnight',
+            'interval': 1,
+            'backupCount': 3,
+            'encoding': 'utf-8',
+            'formatter': 'backend',
+        },
+        'backend_error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.TimedRotatingFileHandler',
+            'filename': str(LOG_DIR / 'backend_errors.log'),
+            'when': 'midnight',
+            'interval': 1,
+            'backupCount': 14,
+            'encoding': 'utf-8',
+            'formatter': 'backend',
+        },
+    },
+    'root': {
+        'handlers': ['backend_file', 'backend_error_file'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}

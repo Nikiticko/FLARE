@@ -1,5 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.conf import settings
+from pathlib import Path
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -25,6 +27,27 @@ from .admin_serializers import (
 )
 
 User = get_user_model()
+
+
+def _parse_backend_log_line(line):
+    raw = (line or '').rstrip('\n')
+    parts = raw.split('|', 3)
+    if len(parts) == 4:
+        return {
+            'timestamp': parts[0],
+            'level': parts[1],
+            'logger': parts[2],
+            'message': parts[3],
+            'raw': raw,
+        }
+
+    return {
+        'timestamp': None,
+        'level': 'UNKNOWN',
+        'logger': None,
+        'message': raw,
+        'raw': raw,
+    }
 
 
 # ======= USERS =======
@@ -410,6 +433,61 @@ class AdminAuditLogListAPI(generics.ListAPIView):
     search_fields = ["action", "actor__email"]
     ordering_fields = ["created_at", "id"]
     ordering = ["-created_at"]
+
+
+class AdminBackendLogListAPI(APIView):
+    permission_classes = [IsAuthenticated, IsAdminRole]
+
+    def get(self, request):
+        levels_param = request.query_params.get('levels', '')
+        requested_levels = {
+            level.strip().upper()
+            for level in levels_param.split(',')
+            if level.strip()
+        }
+        search = request.query_params.get('search', '').strip().lower()
+
+        try:
+            limit = int(request.query_params.get('limit', '500'))
+        except ValueError:
+            limit = 500
+        limit = max(1, min(limit, 5000))
+
+        log_dir = Path(settings.LOG_DIR)
+        base_file = log_dir / 'backend.log'
+        log_files = sorted(log_dir.glob('backend.log*'), key=lambda path: path.stat().st_mtime, reverse=True)
+
+        if base_file.exists() and base_file not in log_files:
+            log_files.insert(0, base_file)
+
+        entries = []
+
+        for file_path in log_files:
+            if len(entries) >= limit:
+                break
+            if not file_path.is_file():
+                continue
+
+            try:
+                with file_path.open('r', encoding='utf-8', errors='replace') as file_obj:
+                    lines = file_obj.readlines()
+            except OSError:
+                continue
+
+            for line in reversed(lines):
+                parsed = _parse_backend_log_line(line)
+
+                if requested_levels and parsed['level'] not in requested_levels:
+                    continue
+
+                if search and search not in parsed['raw'].lower():
+                    continue
+
+                entries.append(parsed)
+                if len(entries) >= limit:
+                    break
+
+        return Response({'count': len(entries), 'results': entries})
 
 
 # ======= COURSES =======
