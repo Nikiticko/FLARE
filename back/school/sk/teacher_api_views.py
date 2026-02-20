@@ -7,6 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from accounts.permissions import IsTeacherOrAdmin
 from .models import Lesson, AuditLog, LessonBalance
 from django.db import transaction
+from .lesson_balance_service import apply_lesson_status_transition, reserve_lesson_slot
 from .teacher_serializers import (
     TeacherLessonSerializer,
     TeacherLessonUpdateSerializer,
@@ -90,24 +91,26 @@ class TeacherLessonsListCreateAPI(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         teacher = self.request.user
-        student = serializer.validated_data.get('student')
-        
-        # Автоматически назначаем текущего пользователя как учителя
-        lesson = serializer.save(teacher=teacher)
-        # Автоматически заполняем parent_full_name из профиля ученика, если не указано
-        if not lesson.parent_full_name and lesson.student:
-            lesson.parent_full_name = lesson.student.parent_full_name or ''
-            lesson.save(update_fields=['parent_full_name'])
-        AuditLog.objects.create(
-            actor=teacher,
-            action="TEACHER_CREATE_LESSON",
-            meta={
-                "lesson_id": lesson.id,
-                "student": lesson.student_id,
-                "student_email": lesson.student.email,
-                "scheduled_at": lesson.scheduled_at.isoformat(),
-            },
-        )
+
+        with transaction.atomic():
+            lesson = serializer.save(teacher=teacher)
+            if not lesson.parent_full_name and lesson.student:
+                lesson.parent_full_name = lesson.student.parent_full_name or ''
+                lesson.save(update_fields=['parent_full_name'])
+
+            reserve_lesson_slot(lesson)
+
+            AuditLog.objects.create(
+                actor=teacher,
+                action="TEACHER_CREATE_LESSON",
+                meta={
+                    "lesson_id": lesson.id,
+                    "student": lesson.student_id,
+                    "student_email": lesson.student.email,
+                    "scheduled_at": lesson.scheduled_at.isoformat(),
+                    "reserved_from_balance": lesson.reserved_from_balance,
+                },
+            )
 
 
 class TeacherLessonDetailAPI(generics.RetrieveAPIView):
@@ -184,7 +187,6 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
 
     def perform_update(self, serializer):
         old_status = self.get_object().status
-        old_debited = self.get_object().debited_from_balance
         
         # Сохраняем урок (миграции применены, все поля должны быть в БД)
         lesson = serializer.save()
@@ -192,51 +194,8 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
         new_status = lesson.status
         status_changed = new_status != old_status
         
-        # ЛОГИКА УПРАВЛЕНИЯ БАЛАНСОМ
-        with transaction.atomic():
-            # ВРЕМЕННО: is_trial всегда False до применения миграций
-            is_trial = getattr(lesson, 'is_trial', False)
-            
-            # Если статус изменился на DONE (завершено)
-            if status_changed and new_status == Lesson.STATUS_DONE:
-                # Списываем баланс только если:
-                # 1. Это НЕ пробное занятие
-                # 2. Баланс еще не был списан
-                if not is_trial and not lesson.debited_from_balance:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    if lb.lessons_available > 0:
-                        lb.lessons_available -= 1
-                        lb.save()
-                        lesson.debited_from_balance = True
-                        lesson.save(update_fields=['debited_from_balance'])
-            
-            # Если статус изменился на CANCELLED (отменено)
-            elif status_changed and new_status == Lesson.STATUS_CANCELLED:
-                # Возвращаем баланс только если:
-                # 1. Это НЕ пробное занятие
-                # 2. Баланс был списан ранее
-                if not is_trial and old_debited:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    lb.lessons_available += 1
-                    lb.save()
-                    lesson.debited_from_balance = False
-                    lesson.save(update_fields=['debited_from_balance'])
-            
-            # Если статус изменился с DONE на другой (например, обратно на PLANNED)
-            elif status_changed and old_status == Lesson.STATUS_DONE and new_status != Lesson.STATUS_DONE:
-                # Возвращаем баланс, если он был списан
-                if not is_trial and old_debited:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    lb.lessons_available += 1
-                    lb.save()
-                    lesson.debited_from_balance = False
-                    lesson.save(update_fields=['debited_from_balance'])
+        if status_changed:
+            apply_lesson_status_transition(lesson, old_status, new_status)
         
         # Синхронизация комментария: если комментарий изменился, обновляем его во всех уроках с этим учеником
         # (комментарий общий для всех уроков с учеником, независимо от учителя)
@@ -257,6 +216,7 @@ class TeacherLessonUpdateAPI(generics.UpdateAPIView):
                 "old_status": old_status,
                 "is_trial": getattr(lesson, 'is_trial', False),
                 "debited_from_balance": lesson.debited_from_balance,
+                "reserved_from_balance": lesson.reserved_from_balance,
                 "cancellation_reason": getattr(lesson, 'cancellation_reason', None) if lesson.status == Lesson.STATUS_CANCELLED else None,
                 "has_feedback": bool(getattr(lesson, 'feedback', '')) if lesson.status == Lesson.STATUS_DONE else None,
             },
@@ -346,6 +306,8 @@ class TeacherStudentByEmailAPI(APIView):
                     "detail": "this student is not assigned to you",
                     "is_my_student": False
                 }, status=403)
+
+        lb, _ = LessonBalance.objects.get_or_create(student=user)
         
         return Response({
             "id": user.id,
@@ -353,6 +315,9 @@ class TeacherStudentByEmailAPI(APIView):
             "student_full_name": user.student_full_name,
             "parent_full_name": user.parent_full_name,
             "role": user.role,
+            "lessons_available": lb.lessons_available,
+            "lessons_reserved": lb.lessons_reserved,
+            "lessons_free_for_planning": max(0, lb.lessons_available - lb.lessons_reserved),
             "is_my_student": True,
         })
 

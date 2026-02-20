@@ -154,9 +154,10 @@ class ManagerLessonCreateSerializer(serializers.ModelSerializer):
             # Для пробных уроков не проверяем баланс
             if not is_trial:
                 lb, _ = LessonBalance.objects.get_or_create(student=student)
-                if lb.lessons_available <= 0:
+                free_slots = lb.lessons_available - lb.lessons_reserved
+                if free_slots <= 0:
                     raise serializers.ValidationError({
-                        "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика или отметьте урок как пробный."
+                        "student": "Нет свободных занятий для планирования. Пополните баланс ученика или отметьте урок как пробный."
                     })
         
         logger.info(f"Validation successful. Final attrs: student={attrs.get('student')}, teacher={attrs.get('teacher')}")

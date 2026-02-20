@@ -61,10 +61,14 @@ class LessonBalance(models.Model):
         related_name="lesson_balance",
     )
     lessons_available = models.PositiveIntegerField(default=0)
+    lessons_reserved = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"LessonBalance(student={self.student}, lessons_available={self.lessons_available})"
+        return (
+            f"LessonBalance(student={self.student}, lessons_available={self.lessons_available}, "
+            f"lessons_reserved={self.lessons_reserved})"
+        )
 
 
 class Lesson(models.Model):
@@ -140,6 +144,10 @@ class Lesson(models.Model):
     debited_from_balance = models.BooleanField(
         default=False,
         help_text="True, если занятие уже списано с баланса",
+    )
+    reserved_from_balance = models.BooleanField(
+        default=False,
+        help_text="True, если под занятие зарезервирован слот баланса",
     )
     is_trial = models.BooleanField(
         default=False,

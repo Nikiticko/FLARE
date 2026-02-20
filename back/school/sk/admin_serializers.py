@@ -199,9 +199,10 @@ class AdminLessonCreateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     "student": "Обычные занятия можно создавать только для учеников."
                 })
-            if lb.lessons_available <= 0:
+            free_slots = lb.lessons_available - lb.lessons_reserved
+            if free_slots <= 0:
                 raise serializers.ValidationError({
-                    "student": "Нельзя создать урок для ученика с нулевым балансом. Пополните баланс ученика."
+                    "student": "Нет свободных занятий для планирования. Пополните баланс ученика."
                 })
         
         return attrs

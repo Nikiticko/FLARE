@@ -26,8 +26,10 @@ export function managerUpdateLesson(id, payload) {
 }
 
 // Отменить урок
-export function managerCancelLesson(id) {
-  return apiClient.post(`/manager/lessons/${id}/cancel/`)
+export function managerCancelLesson(id, cancellationReason) {
+  return apiClient.post(`/manager/lessons/${id}/cancel/`, {
+    cancellation_reason: cancellationReason,
+  })
 }
 
 // Списать урок с баланса

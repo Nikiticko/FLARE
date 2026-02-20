@@ -182,9 +182,10 @@ class TeacherLessonCreateSerializer(serializers.ModelSerializer):
             
             # Проверяем баланс: должен быть положительным
             lb, _ = LessonBalance.objects.get_or_create(student=student)
-            if lb.lessons_available <= 0:
+            free_slots = lb.lessons_available - lb.lessons_reserved
+            if free_slots <= 0:
                 raise serializers.ValidationError({
-                    "student": "Нельзя создать урок для ученика с нулевым балансом. Обратитесь к менеджеру для пополнения баланса."
+                    "student": "Нет свободных занятий для планирования. Обратитесь к менеджеру для пополнения баланса."
                 })
         
         logger.info(f"Validation successful. Final attrs: student={attrs.get('student')}")

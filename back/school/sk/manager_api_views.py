@@ -7,7 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.permissions import IsManagerOrAdmin
 from .models import Lesson, LessonBalance, Payment, AuditLog, ClientRequest
-from django.db import transaction
+from .lesson_balance_service import apply_lesson_status_transition, debit_lesson_balance, reserve_lesson_slot
 from .manager_serializers import (
     ManagerClientSerializer,
     ManagerLessonSerializer,
@@ -151,25 +151,29 @@ class ManagerLessonsListCreateAPI(generics.ListCreateAPIView):
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"Creating lesson with data: {serializer.validated_data}")
-        
-        lesson = serializer.save()
-        # Автоматически заполняем parent_full_name из профиля ученика, если не указано
-        if not lesson.parent_full_name and lesson.student:
-            lesson.parent_full_name = lesson.student.parent_full_name or ''
-            lesson.save(update_fields=['parent_full_name'])
-        AuditLog.objects.create(
-            actor=self.request.user,
-            action="MANAGER_CREATE_LESSON",
-            meta={
-                "lesson_id": lesson.id,
-                "student": lesson.student_id,
-                "student_email": lesson.student.email,
-                "teacher": lesson.teacher_id,
-                "teacher_email": lesson.teacher.email if lesson.teacher else None,
-                "scheduled_at": lesson.scheduled_at.isoformat(),
-                "is_trial": lesson.is_trial,
-            },
-        )
+
+        with transaction.atomic():
+            lesson = serializer.save()
+            if not lesson.parent_full_name and lesson.student:
+                lesson.parent_full_name = lesson.student.parent_full_name or ''
+                lesson.save(update_fields=['parent_full_name'])
+
+            reserve_lesson_slot(lesson)
+
+            AuditLog.objects.create(
+                actor=self.request.user,
+                action="MANAGER_CREATE_LESSON",
+                meta={
+                    "lesson_id": lesson.id,
+                    "student": lesson.student_id,
+                    "student_email": lesson.student.email,
+                    "teacher": lesson.teacher_id,
+                    "teacher_email": lesson.teacher.email if lesson.teacher else None,
+                    "scheduled_at": lesson.scheduled_at.isoformat(),
+                    "is_trial": lesson.is_trial,
+                    "reserved_from_balance": lesson.reserved_from_balance,
+                },
+            )
 
 
 class ManagerLessonUpdateAPI(generics.UpdateAPIView):
@@ -210,58 +214,14 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
     def perform_update(self, serializer):
         old_lesson = self.get_object()
         old_status = old_lesson.status
-        old_debited = old_lesson.debited_from_balance
         
         lesson = serializer.save()
         
         new_status = lesson.status
         status_changed = new_status != old_status
         
-        # ЛОГИКА УПРАВЛЕНИЯ БАЛАНСОМ (аналогично учителю)
-        with transaction.atomic():
-            # ВРЕМЕННО: is_trial всегда False до применения миграций
-            is_trial = getattr(lesson, 'is_trial', False)
-            
-            # Если статус изменился на DONE (завершено)
-            if status_changed and new_status == Lesson.STATUS_DONE:
-                # Списываем баланс только если:
-                # 1. Это НЕ пробное занятие
-                # 2. Баланс еще не был списан
-                if not is_trial and not lesson.debited_from_balance:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    if lb.lessons_available > 0:
-                        lb.lessons_available -= 1
-                        lb.save()
-                        lesson.debited_from_balance = True
-                        lesson.save(update_fields=['debited_from_balance'])
-            
-            # Если статус изменился на CANCELLED (отменено)
-            elif status_changed and new_status == Lesson.STATUS_CANCELLED:
-                # Возвращаем баланс только если:
-                # 1. Это НЕ пробное занятие
-                # 2. Баланс был списан ранее
-                if not is_trial and old_debited:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    lb.lessons_available += 1
-                    lb.save()
-                    lesson.debited_from_balance = False
-                    lesson.save(update_fields=['debited_from_balance'])
-            
-            # Если статус изменился с DONE на другой
-            elif status_changed and old_status == Lesson.STATUS_DONE and new_status != Lesson.STATUS_DONE:
-                # Возвращаем баланс, если он был списан
-                if not is_trial and old_debited:
-                    lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                        student=lesson.student
-                    )
-                    lb.lessons_available += 1
-                    lb.save()
-                    lesson.debited_from_balance = False
-                    lesson.save(update_fields=['debited_from_balance'])
+        if status_changed:
+            apply_lesson_status_transition(lesson, old_status, new_status)
         
         # Синхронизация комментария: если комментарий изменился, обновляем его во всех уроках с этим учеником
         if 'comment' in serializer.validated_data:
@@ -282,6 +242,7 @@ class ManagerLessonUpdateAPI(generics.UpdateAPIView):
                 "old_status": old_status,
                 "is_trial": lesson.is_trial,
                 "debited_from_balance": lesson.debited_from_balance,
+                "reserved_from_balance": lesson.reserved_from_balance,
                 "cancellation_reason": getattr(lesson, 'cancellation_reason', None) if lesson.status == Lesson.STATUS_CANCELLED else None,
             },
         )
@@ -314,11 +275,14 @@ class ManagerLessonCancelAPI(APIView):
                 "cancellation_reason": ["Причина отмены обязательна"]
             }, status=400)
 
-        lesson.status = Lesson.STATUS_CANCELLED
-        # Безопасно устанавливаем причину отмены (если поле существует)
-        if hasattr(lesson, 'cancellation_reason'):
-            lesson.cancellation_reason = cancellation_reason
-        lesson.save()
+        old_status = lesson.status
+
+        with transaction.atomic():
+            lesson.status = Lesson.STATUS_CANCELLED
+            if hasattr(lesson, 'cancellation_reason'):
+                lesson.cancellation_reason = cancellation_reason
+            lesson.save(update_fields=['status', 'cancellation_reason'])
+            apply_lesson_status_transition(lesson, old_status, Lesson.STATUS_CANCELLED)
 
         AuditLog.objects.create(
             actor=request.user,
@@ -357,19 +321,10 @@ class ManagerLessonDebitAPI(APIView):
             return Response({"detail": "already debited"}, status=400)
 
         with transaction.atomic():
-            lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                student=les.student
-            )
-            if lb.lessons_available <= 0:
-                return Response({"detail": "no lessons available"}, status=400)
-
-            lb.lessons_available -= 1
-            lb.save()
-
-            les.debited_from_balance = True
+            debit_lesson_balance(les)
             if mark_done:
                 les.status = Lesson.STATUS_DONE
-            les.save()
+                les.save(update_fields=['status'])
 
             AuditLog.objects.create(
                 actor=request.user,
@@ -379,6 +334,7 @@ class ManagerLessonDebitAPI(APIView):
                     "student": les.student_id,
                     "mark_done": mark_done,
                     "is_trial": False,
+                    "reserved_from_balance": les.reserved_from_balance,
                 },
             )
 

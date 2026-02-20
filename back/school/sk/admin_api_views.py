@@ -11,6 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.permissions import IsAdminRole
 from .models import Payment, Lesson, LessonBalance, AuditLog, Course, PaymentSettings
+from .lesson_balance_service import apply_lesson_status_transition, debit_lesson_balance, reserve_lesson_slot
 from .admin_serializers import (
     AdminUserListSerializer,
     AdminUserDetailSerializer,
@@ -323,23 +324,27 @@ class AdminLessonListAPI(generics.ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        lesson = serializer.save()
-        # Автоматически заполняем parent_full_name из профиля ученика, если не указано
-        if not lesson.parent_full_name and lesson.student:
-            lesson.parent_full_name = lesson.student.parent_full_name or ''
-            lesson.save(update_fields=['parent_full_name'])
-        AuditLog.objects.create(
-            actor=self.request.user,
-            action="CREATE_LESSON",
-            meta={
-                "lesson_id": lesson.id,
-                "student": lesson.student_id,
-                "student_email": lesson.student.email,
-                "teacher": lesson.teacher_id,
-                "teacher_email": lesson.teacher.email if lesson.teacher else None,
-                "scheduled_at": lesson.scheduled_at.isoformat(),
-            },
-        )
+        with transaction.atomic():
+            lesson = serializer.save()
+            if not lesson.parent_full_name and lesson.student:
+                lesson.parent_full_name = lesson.student.parent_full_name or ''
+                lesson.save(update_fields=['parent_full_name'])
+
+            reserve_lesson_slot(lesson)
+
+            AuditLog.objects.create(
+                actor=self.request.user,
+                action="CREATE_LESSON",
+                meta={
+                    "lesson_id": lesson.id,
+                    "student": lesson.student_id,
+                    "student_email": lesson.student.email,
+                    "teacher": lesson.teacher_id,
+                    "teacher_email": lesson.teacher.email if lesson.teacher else None,
+                    "scheduled_at": lesson.scheduled_at.isoformat(),
+                    "reserved_from_balance": lesson.reserved_from_balance,
+                },
+            )
 
 
 class AdminLessonUpdateAPI(generics.UpdateAPIView):
@@ -389,7 +394,9 @@ class AdminLessonUpdateAPI(generics.UpdateAPIView):
         return Response(response_data)
 
     def perform_update(self, serializer):
+        old_status = self.get_object().status
         lesson = serializer.save()
+        apply_lesson_status_transition(lesson, old_status, lesson.status)
         AuditLog.objects.create(
             actor=self.request.user,
             action="UPDATE_LESSON",
@@ -398,6 +405,9 @@ class AdminLessonUpdateAPI(generics.UpdateAPIView):
                 "student": lesson.student_id,
                 "teacher": lesson.teacher_id,
                 "status": lesson.status,
+                "old_status": old_status,
+                "debited_from_balance": lesson.debited_from_balance,
+                "reserved_from_balance": lesson.reserved_from_balance,
             },
         )
 
@@ -417,23 +427,17 @@ class AdminLessonDebitAPI(APIView):
         except Lesson.DoesNotExist:
             return Response({"detail": "lesson not found"}, status=404)
 
+        if getattr(les, 'is_trial', False):
+            return Response({"detail": "trial lessons cannot be debited"}, status=400)
+
         if les.debited_from_balance:
             return Response({"detail": "already debited"}, status=400)
 
         with transaction.atomic():
-            lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                student=les.student
-            )
-            if lb.lessons_available <= 0:
-                return Response({"detail": "no lessons available"}, status=400)
-
-            lb.lessons_available -= 1
-            lb.save()
-
-            les.debited_from_balance = True
+            debit_lesson_balance(les)
             if mark_done:
                 les.status = Lesson.STATUS_DONE
-            les.save()
+                les.save(update_fields=['status'])
 
             AuditLog.objects.create(
                 actor=request.user,
@@ -442,6 +446,7 @@ class AdminLessonDebitAPI(APIView):
                     "lesson_id": les.id,
                     "student": les.student_id,
                     "mark_done": mark_done,
+                    "reserved_from_balance": les.reserved_from_balance,
                 },
             )
         return Response({"detail": "ok"})
