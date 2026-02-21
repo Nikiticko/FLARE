@@ -168,6 +168,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { updateMeApi, changePasswordApi, verifyPasswordApi } from '../../api/auth'
+import { resolveMediaUrl } from '../../utils/media'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -210,33 +211,9 @@ const passwordLoading = ref(false)
 const passwordError = ref(null)
 const passwordSuccess = ref(null)
 
-const resolveAvatarUrl = (url) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-
-  let normalized = url
-  if (!normalized.startsWith('/')) {
-    normalized = normalized.startsWith('media/')
-      ? `/${normalized}`
-      : `/media/${normalized}`
-  }
-
-  if (import.meta.env.DEV) {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
-    try {
-      const origin = new URL(apiBase, window.location.origin).origin
-      return `${origin}${normalized}`
-    } catch {
-      return normalized
-    }
-  }
-
-  return normalized
-}
-
 const displayAvatar = computed(() => {
   if (avatarPreview.value) return avatarPreview.value
-  return resolveAvatarUrl(auth.user?.avatar_url || auth.user?.avatar || '')
+  return resolveMediaUrl(auth.user?.avatar_url || auth.user?.avatar || '')
 })
 
 const revokeAvatarPreview = () => {

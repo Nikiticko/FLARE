@@ -162,6 +162,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import ManagerRequestForm from '../../components/ManagerRequestForm.vue'
 import { getDashboard, studentGetLessons, studentCreateRequest } from '../../api/student'
+import { resolveMediaUrl } from '../../utils/media'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -278,30 +279,6 @@ const canGoHistoryNext = computed(() => {
   return historyPage.value < historyTotalPages.value
 })
 
-const resolveAvatarUrl = (url) => {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://')) return url
-
-  let normalized = url
-  if (!normalized.startsWith('/')) {
-    normalized = normalized.startsWith('media/')
-      ? `/${normalized}`
-      : `/media/${normalized}`
-  }
-
-  if (import.meta.env.DEV) {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
-    try {
-      const origin = new URL(apiBase, window.location.origin).origin
-      return `${origin}${normalized}`
-    } catch {
-      return normalized
-    }
-  }
-
-  return normalized
-}
-
 const avatarSrc = computed(() => {
   const source =
     dashboardData.value?.avatar_url ||
@@ -309,7 +286,7 @@ const avatarSrc = computed(() => {
     dashboardData.value?.avatar ||
     auth.user?.avatar ||
     ''
-  return resolveAvatarUrl(source)
+  return resolveMediaUrl(source)
 })
 
 const formatDate = (dateString) => {
