@@ -16,6 +16,7 @@ class User(AbstractUser):
     student_full_name = models.CharField('ФИО ученика', max_length=255, blank=True)
     parent_full_name = models.CharField('ФИО родителя', max_length=255, blank=True)
     parent_password_hash = models.CharField('Хеш пароля родителя', max_length=255, blank=True)
+    avatar = models.FileField('Аватар', upload_to='avatars/%Y/%m/', blank=True, null=True)
 
     role = models.CharField(
         'Роль',

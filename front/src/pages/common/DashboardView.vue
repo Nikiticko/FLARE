@@ -8,7 +8,8 @@
           <!-- Профиль пользователя -->
           <div class="card profile-card">
             <div class="profile-avatar">
-              <svg viewBox="0 0 100 100" class="avatar-icon">
+              <img v-if="avatarSrc" :src="avatarSrc" alt="Аватар" class="avatar-image" />
+              <svg v-else viewBox="0 0 100 100" class="avatar-icon">
                 <circle cx="50" cy="50" r="50" fill="rgba(255, 255, 255, 0.1)"/>
                 <circle cx="50" cy="35" r="15" fill="rgba(255, 255, 255, 0.8)"/>
                 <path d="M 20 85 Q 20 65 50 65 Q 80 65 80 85" fill="rgba(255, 255, 255, 0.8)"/>
@@ -277,6 +278,10 @@ const canGoHistoryNext = computed(() => {
   return historyPage.value < historyTotalPages.value
 })
 
+const avatarSrc = computed(() => {
+  return dashboardData.value?.avatar_url || auth.user?.avatar_url || ''
+})
+
 const formatDate = (dateString) => {
   if (!dateString) return 'дд.мм.гг'
   const d = new Date(dateString)
@@ -393,6 +398,13 @@ onMounted(async () => {
 .avatar-icon {
   width: 60px;
   height: 60px;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .profile-info {

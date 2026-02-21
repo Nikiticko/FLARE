@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
 from rest_framework import permissions, status
+from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -30,7 +31,7 @@ class RegisterAPI(APIView):
         # По UX можно сразу логинить — но в ТЗ достаточно регистрации:
         tokens = issue_tokens_for_user(user)
         return Response({
-            "user": MeSerializer(user).data,
+            "user": MeSerializer(user, context={"request": request}).data,
             "tokens": tokens
         }, status=status.HTTP_201_CREATED)
 
@@ -47,7 +48,7 @@ class LoginAPI(APIView):
         if not user:
             return Response({"detail": "Неверный email или пароль"}, status=400)
         tokens = issue_tokens_for_user(user)
-        return Response({"user": MeSerializer(user).data, "tokens": tokens})
+        return Response({"user": MeSerializer(user, context={"request": request}).data, "tokens": tokens})
 
 
 class AdminLoginAPI(APIView):
@@ -92,21 +93,22 @@ class AdminLoginAPI(APIView):
                 user.save()
 
         tokens = issue_tokens_for_user(user)
-        return Response({"user": MeSerializer(user).data, "tokens": tokens})
+        return Response({"user": MeSerializer(user, context={"request": request}).data, "tokens": tokens})
 
 
 class MeAPI(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
-        return Response(MeSerializer(request.user).data)
+        return Response(MeSerializer(request.user, context={"request": request}).data)
     
     def patch(self, request):
         """Обновление профиля текущего пользователя"""
         serializer = UpdateProfileSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(MeSerializer(request.user).data)
+        return Response(MeSerializer(request.user, context={"request": request}).data)
 
 
 class VerifyPasswordAPI(APIView):

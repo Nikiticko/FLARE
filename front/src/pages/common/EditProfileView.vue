@@ -7,6 +7,33 @@
       </div>
       <div class="profile-form card">
         <form @submit.prevent="handleSubmit">
+          <div class="avatar-section">
+            <div class="avatar-preview" @click="openAvatarPicker">
+              <img v-if="displayAvatar" :src="displayAvatar" alt="Аватар" class="avatar-image" />
+              <span v-else class="avatar-placeholder">Добавить аватар</span>
+            </div>
+            <input
+              ref="avatarInput"
+              type="file"
+              class="avatar-input-hidden"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              @change="handleAvatarSelect"
+            />
+            <div class="avatar-actions">
+              <button type="button" class="btn-avatar" @click="openAvatarPicker">Выбрать файл</button>
+              <button
+                v-if="displayAvatar"
+                type="button"
+                class="btn-avatar btn-avatar-remove"
+                @click="handleAvatarRemove"
+              >
+                Удалить
+              </button>
+            </div>
+            <p class="avatar-hint">Фото: JPG/PNG/WEBP до 2 МБ (будет приведено к 512x512). GIF: до 5 МБ и до 512x512.</p>
+            <p v-if="avatarError" class="error-message">{{ avatarError }}</p>
+          </div>
+
           <div class="form-group">
             <label for="email">Email</label>
             <input
@@ -137,7 +164,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import { useRouter } from 'vue-router'
 import { updateMeApi, changePasswordApi, verifyPasswordApi } from '../../api/auth'
@@ -160,9 +187,18 @@ const formData = ref({
   parent_full_name: ''
 })
 
+const MAX_PHOTO_SIZE_BYTES = 2 * 1024 * 1024
+const MAX_GIF_SIZE_BYTES = 5 * 1024 * 1024
+const allowedAvatarTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+
 const loading = ref(false)
 const error = ref(null)
 const success = ref(false)
+const avatarError = ref(null)
+const avatarInput = ref(null)
+const avatarFile = ref(null)
+const avatarPreview = ref('')
+const avatarClear = ref(false)
 
 const showPasswordForm = ref(false)
 const showOldPassword = ref(false)
@@ -173,6 +209,59 @@ const verifyLoading = ref(false)
 const passwordLoading = ref(false)
 const passwordError = ref(null)
 const passwordSuccess = ref(null)
+
+const displayAvatar = computed(() => {
+  if (avatarPreview.value) return avatarPreview.value
+  return auth.user?.avatar_url || ''
+})
+
+const revokeAvatarPreview = () => {
+  if (avatarPreview.value) {
+    URL.revokeObjectURL(avatarPreview.value)
+    avatarPreview.value = ''
+  }
+}
+
+const openAvatarPicker = () => {
+  avatarInput.value?.click()
+}
+
+const handleAvatarSelect = (event) => {
+  avatarError.value = null
+  const selected = event.target?.files?.[0]
+  if (!selected) return
+
+  if (!allowedAvatarTypes.includes(selected.type)) {
+    avatarError.value = 'Поддерживаются JPG, PNG, WEBP и GIF'
+    event.target.value = ''
+    return
+  }
+
+  const isGif = selected.type === 'image/gif'
+  const maxSize = isGif ? MAX_GIF_SIZE_BYTES : MAX_PHOTO_SIZE_BYTES
+  if (selected.size > maxSize) {
+    avatarError.value = isGif
+      ? 'GIF должен быть не больше 5 МБ'
+      : 'Фото должно быть не больше 2 МБ'
+    event.target.value = ''
+    return
+  }
+
+  revokeAvatarPreview()
+  avatarFile.value = selected
+  avatarPreview.value = URL.createObjectURL(selected)
+  avatarClear.value = false
+}
+
+const handleAvatarRemove = () => {
+  avatarError.value = null
+  avatarFile.value = null
+  avatarClear.value = true
+  revokeAvatarPreview()
+  if (avatarInput.value) {
+    avatarInput.value.value = ''
+  }
+}
 
 const loadProfile = async () => {
   if (!auth.user && auth.isAuthenticated) {
@@ -195,7 +284,25 @@ const handleSubmit = async () => {
   success.value = false
 
   try {
-    const { data } = await updateMeApi(formData.value)
+    let payload = formData.value
+
+    if (avatarFile.value || avatarClear.value) {
+      const multipart = new FormData()
+      multipart.append('email', formData.value.email)
+      multipart.append('phone', formData.value.phone || '')
+      multipart.append('student_full_name', formData.value.student_full_name || '')
+      multipart.append('parent_full_name', formData.value.parent_full_name || '')
+
+      if (avatarFile.value) {
+        multipart.append('avatar', avatarFile.value)
+      }
+      if (avatarClear.value) {
+        multipart.append('avatar_clear', 'true')
+      }
+      payload = multipart
+    }
+
+    const { data } = await updateMeApi(payload)
     
     // Обновляем данные в store
     await auth.fetchMe()
@@ -303,6 +410,10 @@ const handleChangePassword = async () => {
 onMounted(() => {
   loadProfile()
 })
+
+onUnmounted(() => {
+  revokeAvatarPreview()
+})
 </script>
 
 <style scoped>
@@ -347,6 +458,67 @@ onMounted(() => {
   box-shadow: 0 12px 30px rgba(255, 215, 0, 0.3);
   border-color: #FF8C00;
   transform: translateY(-2px);
+}
+
+.avatar-section {
+  margin-bottom: 28px;
+}
+
+.avatar-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid #FFD700;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  text-align: center;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 0 10px;
+}
+
+.avatar-input-hidden {
+  display: none;
+}
+
+.avatar-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.btn-avatar {
+  padding: 8px 14px;
+  background: rgba(255, 215, 0, 0.2);
+  color: #FFD700;
+  border: 1px solid #FFD700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn-avatar-remove {
+  border-color: rgba(255, 107, 107, 0.6);
+  color: #ffb3b3;
+  background: rgba(255, 107, 107, 0.14);
+}
+
+.avatar-hint {
+  margin-top: 10px;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .form-group {

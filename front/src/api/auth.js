@@ -25,7 +25,10 @@ export function adminLoginApi({ email, password }) {
 
 // обновление профиля текущего пользователя
 export function updateMeApi(payload) {
-  return apiClient.patch('/auth/me/', payload)
+  const config = payload instanceof FormData
+    ? { headers: { 'Content-Type': 'multipart/form-data' } }
+    : undefined
+  return apiClient.patch('/auth/me/', payload, config)
 }
 
 // проверка текущего пароля
