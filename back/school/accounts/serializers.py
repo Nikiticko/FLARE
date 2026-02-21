@@ -68,7 +68,14 @@ class MeSerializer(serializers.ModelSerializer):
     def get_avatar_url(self, obj):
         if not obj.avatar:
             return None
-        return obj.avatar.url
+        raw_url = obj.avatar.url or ""
+        if raw_url.startswith("http://") or raw_url.startswith("https://"):
+            return raw_url
+        if raw_url.startswith("/media/"):
+            return raw_url
+        if raw_url.startswith("media/"):
+            return f"/{raw_url}"
+        return f"/media/{raw_url.lstrip('/')}"
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):

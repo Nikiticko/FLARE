@@ -27,6 +27,20 @@ from .student_serializers import (
 User = get_user_model()
 
 
+def _normalized_avatar_url(user):
+    avatar = getattr(user, "avatar", None)
+    if not avatar:
+        return None
+    raw_url = avatar.url or ""
+    if raw_url.startswith("http://") or raw_url.startswith("https://"):
+        return raw_url
+    if raw_url.startswith("/media/"):
+        return raw_url
+    if raw_url.startswith("media/"):
+        return f"/{raw_url}"
+    return f"/media/{raw_url.lstrip('/')}"
+
+
 # ===== UNIFIED DASHBOARD =====
 
 class UnifiedDashboardAPI(APIView):
@@ -55,8 +69,8 @@ class UnifiedDashboardAPI(APIView):
             "level": profile.level if profile else None,
             "xp": profile.xp if profile else None,
             "season_currency": profile.season_currency if profile else None,
-            "avatar": user.avatar.url if getattr(user, "avatar", None) else None,
-            "avatar_url": user.avatar.url if getattr(user, "avatar", None) else None,
+            "avatar": _normalized_avatar_url(user),
+            "avatar_url": _normalized_avatar_url(user),
         }
         ser = UnifiedDashboardSerializer(data)
         return Response(ser.data)
@@ -85,8 +99,8 @@ class StudentDashboardAPI(APIView):
             "level": profile.level,
             "xp": profile.xp,
             "season_currency": profile.season_currency,
-            "avatar": user.avatar.url if getattr(user, "avatar", None) else None,
-            "avatar_url": user.avatar.url if getattr(user, "avatar", None) else None,
+            "avatar": _normalized_avatar_url(user),
+            "avatar_url": _normalized_avatar_url(user),
         }
         ser = StudentDashboardSerializer(data)
         return Response(ser.data)
