@@ -278,8 +278,32 @@ const canGoHistoryNext = computed(() => {
   return historyPage.value < historyTotalPages.value
 })
 
+const resolveAvatarUrl = (url) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (!url.startsWith('/')) return url
+
+  if (import.meta.env.DEV) {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+    try {
+      const origin = new URL(apiBase, window.location.origin).origin
+      return `${origin}${url}`
+    } catch {
+      return url
+    }
+  }
+
+  return url
+}
+
 const avatarSrc = computed(() => {
-  return dashboardData.value?.avatar_url || auth.user?.avatar_url || ''
+  const source =
+    dashboardData.value?.avatar_url ||
+    auth.user?.avatar_url ||
+    dashboardData.value?.avatar ||
+    auth.user?.avatar ||
+    ''
+  return resolveAvatarUrl(source)
 })
 
 const formatDate = (dateString) => {

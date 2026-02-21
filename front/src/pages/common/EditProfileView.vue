@@ -210,9 +210,27 @@ const passwordLoading = ref(false)
 const passwordError = ref(null)
 const passwordSuccess = ref(null)
 
+const resolveAvatarUrl = (url) => {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://')) return url
+  if (!url.startsWith('/')) return url
+
+  if (import.meta.env.DEV) {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api'
+    try {
+      const origin = new URL(apiBase, window.location.origin).origin
+      return `${origin}${url}`
+    } catch {
+      return url
+    }
+  }
+
+  return url
+}
+
 const displayAvatar = computed(() => {
   if (avatarPreview.value) return avatarPreview.value
-  return auth.user?.avatar_url || ''
+  return resolveAvatarUrl(auth.user?.avatar_url || auth.user?.avatar || '')
 })
 
 const revokeAvatarPreview = () => {
