@@ -23,6 +23,8 @@ class StudentDashboardSerializer(serializers.Serializer):
     level = serializers.IntegerField()
     xp = serializers.IntegerField()
     season_currency = serializers.IntegerField()
+    avatar = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    avatar_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class UnifiedDashboardSerializer(serializers.Serializer):
@@ -38,6 +40,8 @@ class UnifiedDashboardSerializer(serializers.Serializer):
     level = serializers.IntegerField(required=False, allow_null=True)
     xp = serializers.IntegerField(required=False, allow_null=True)
     season_currency = serializers.IntegerField(required=False, allow_null=True)
+    avatar = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    avatar_url = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
 class StudentCourseSerializer(serializers.ModelSerializer):

@@ -55,6 +55,8 @@ class UnifiedDashboardAPI(APIView):
             "level": profile.level if profile else None,
             "xp": profile.xp if profile else None,
             "season_currency": profile.season_currency if profile else None,
+            "avatar": user.avatar.url if getattr(user, "avatar", None) else None,
+            "avatar_url": user.avatar.url if getattr(user, "avatar", None) else None,
         }
         ser = UnifiedDashboardSerializer(data)
         return Response(ser.data)
@@ -83,6 +85,8 @@ class StudentDashboardAPI(APIView):
             "level": profile.level,
             "xp": profile.xp,
             "season_currency": profile.season_currency,
+            "avatar": user.avatar.url if getattr(user, "avatar", None) else None,
+            "avatar_url": user.avatar.url if getattr(user, "avatar", None) else None,
         }
         ser = StudentDashboardSerializer(data)
         return Response(ser.data)
