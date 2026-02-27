@@ -1,6 +1,7 @@
 import base64
 import json
 import logging
+import re
 import uuid
 from decimal import Decimal
 from urllib import error, request as urllib_request
@@ -68,6 +69,22 @@ def _yookassa_request(method: str, path: str, payload=None, idempotence_key: str
 def _append_query_param(url: str, key: str, value: str) -> str:
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}{key}={value}"
+
+
+def _normalize_yookassa_phone(raw_phone: str) -> str:
+    cleaned = (raw_phone or "").strip()
+    if not cleaned:
+        return ""
+
+    digits = re.sub(r"\D", "", cleaned)
+    if len(digits) == 11 and digits.startswith("8"):
+        digits = "7" + digits[1:]
+
+    candidate = f"+{digits}" if digits else ""
+    if re.fullmatch(r"\+[1-9]\d{9,14}", candidate or ""):
+        return candidate
+
+    return ""
 
 
 def _finalize_successful_payment(payment_id: int, event_name: str = "YOOKASSA_PAYMENT_SUCCEEDED"):
@@ -171,13 +188,21 @@ class YooKassaCreatePaymentAPI(APIView):
 
         vat_code = int(getattr(settings, "YOOKASSA_VAT_CODE", 1))
         customer_email = (getattr(user, "email", "") or "").strip()
-        customer_phone = (getattr(user, "phone", "") or "").strip()
+        raw_customer_phone = (getattr(user, "phone", "") or "").strip()
+        customer_phone = _normalize_yookassa_phone(raw_customer_phone)
 
         customer = {}
         if customer_email:
             customer["email"] = customer_email
         if customer_phone:
             customer["phone"] = customer_phone
+
+        if raw_customer_phone and not customer_phone:
+            logger.warning(
+                "Skipping invalid user phone for YooKassa receipt: user_id=%s phone=%s",
+                user.id,
+                raw_customer_phone,
+            )
 
         if not customer:
             payment.delete()
