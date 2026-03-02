@@ -144,15 +144,21 @@ class ManagerLessonCreateSerializer(serializers.ModelSerializer):
         if student:
             from .models import LessonBalance
             student_role = getattr(student, 'role', None)
-            
-            # Проверяем, что это именно ученик
-            if student_role != 'STUDENT':
-                raise serializers.ValidationError({
-                    "student": "Занятия можно создавать только для учеников."
-                })
-            
-            # Для пробных уроков не проверяем баланс
-            if not is_trial:
+
+            if is_trial:
+                # Пробное занятие можно поставить ученику или абитуриенту,
+                # баланс для пробного не проверяется.
+                if student_role not in ('STUDENT', 'APPLICANT'):
+                    raise serializers.ValidationError({
+                        "student": "Пробное занятие можно создавать только для ученика или абитуриента."
+                    })
+            else:
+                # Обычные занятия — только для учеников и только при наличии свободного баланса.
+                if student_role != 'STUDENT':
+                    raise serializers.ValidationError({
+                        "student": "Занятия можно создавать только для учеников."
+                    })
+
                 lb, _ = LessonBalance.objects.get_or_create(student=student)
                 free_slots = lb.lessons_available - lb.lessons_reserved
                 if free_slots <= 0:

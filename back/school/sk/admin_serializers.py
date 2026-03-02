@@ -186,24 +186,33 @@ class AdminLessonCreateSerializer(serializers.ModelSerializer):
         if not attrs.get('teacher'):
             raise serializers.ValidationError({"teacher": "Either teacher or teacher_email is required"})
         
-        # ВРЕМЕННО УБРАНА валидация is_trial до применения миграций
-        # Просто проверяем баланс
+        # Проверка роли и баланса с учетом пробных занятий
         student = attrs.get('student')
+        is_trial = attrs.get('is_trial', False)
         if student:
             from .models import LessonBalance
             student_role = getattr(student, 'role', None)
-            lb, _ = LessonBalance.objects.get_or_create(student=student)
-            
-            # Обычные занятия можно создавать только для учеников с положительным балансом
-            if student_role != 'STUDENT':
-                raise serializers.ValidationError({
-                    "student": "Обычные занятия можно создавать только для учеников."
-                })
-            free_slots = lb.lessons_available - lb.lessons_reserved
-            if free_slots <= 0:
-                raise serializers.ValidationError({
-                    "student": "Нет свободных занятий для планирования. Пополните баланс ученика."
-                })
+
+            if is_trial:
+                # Пробное занятие можно поставить ученику или абитуриенту,
+                # баланс для пробного не проверяется.
+                if student_role not in ('STUDENT', 'APPLICANT'):
+                    raise serializers.ValidationError({
+                        "student": "Пробное занятие можно создавать только для ученика или абитуриента."
+                    })
+            else:
+                # Обычные занятия можно создавать только для учеников с положительным свободным балансом.
+                if student_role != 'STUDENT':
+                    raise serializers.ValidationError({
+                        "student": "Обычные занятия можно создавать только для учеников."
+                    })
+
+                lb, _ = LessonBalance.objects.get_or_create(student=student)
+                free_slots = lb.lessons_available - lb.lessons_reserved
+                if free_slots <= 0:
+                    raise serializers.ValidationError({
+                        "student": "Нет свободных занятий для планирования. Пополните баланс ученика или отметьте урок как пробный."
+                    })
         
         return attrs
 
