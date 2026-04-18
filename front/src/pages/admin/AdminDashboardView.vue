@@ -12,6 +12,45 @@
         </div>
       </div>
 
+      <section class="admin-card quick-create-card">
+        <div class="card-header">
+          <div class="card-icon">⚡</div>
+          <h2 class="card-title">Быстрое создание аккаунта</h2>
+        </div>
+
+        <form class="quick-create-form" @submit.prevent="handleQuickCreate">
+          <div class="quick-create-inputs">
+            <div class="filter-group">
+              <input
+                v-model.trim="quickCreateEmail"
+                type="email"
+                placeholder="Email нового клиента"
+                class="filter-input"
+                autocomplete="off"
+              />
+            </div>
+
+            <button class="btn primary" type="submit" :disabled="creatingUser || !quickCreateEmail">
+              {{ creatingUser ? '⏳ Создаём...' : 'Создать аккаунт' }}
+            </button>
+          </div>
+
+          <p class="quick-create-hint">
+            Будет создан аккаунт с паролем `12345678`. Остальные данные пользователь заполнит сам в своём профиле.
+          </p>
+
+          <div v-if="createUserError" class="error-message inline-message">
+            <span class="error-icon">⚠️</span>
+            <span>{{ createUserError }}</span>
+          </div>
+
+          <div v-if="createUserSuccess" class="success-message inline-message">
+            <span class="success-icon">✅</span>
+            <span>{{ createUserSuccess }}</span>
+          </div>
+        </form>
+      </section>
+
       <!-- ПОЛЬЗОВАТЕЛИ -->
       <section class="admin-card users-card">
         <div class="card-header">
@@ -180,6 +219,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
+import { registerApi } from '../../api/auth'
 import {
   adminGetUsers,
   adminUpdateUser,
@@ -197,6 +237,10 @@ const usersError = ref(null)
 
 const search = ref('')
 const roleFilter = ref('')
+const quickCreateEmail = ref('')
+const creatingUser = ref(false)
+const createUserError = ref(null)
+const createUserSuccess = ref(null)
 
 const editUser = ref(null)
 const editForm = ref({
@@ -238,6 +282,54 @@ const handleChangeRole = async (user) => {
     usersError.value =
       err?.response?.data?.detail || 'Не удалось изменить роль пользователя'
     await loadUsers()
+  }
+}
+
+const handleQuickCreate = async () => {
+  if (!quickCreateEmail.value) return
+
+  creatingUser.value = true
+  createUserError.value = null
+  createUserSuccess.value = null
+
+  try {
+    await registerApi({
+      email: quickCreateEmail.value,
+      phone: '',
+      student_full_name: '',
+      parent_full_name: '',
+      password: '12345678',
+    })
+
+    createUserSuccess.value = `Аккаунт для ${quickCreateEmail.value} создан. Стартовый пароль: 12345678`
+    quickCreateEmail.value = ''
+    await loadUsers()
+  } catch (err) {
+    console.error('quick create user error:', err)
+
+    if (err?.response?.data) {
+      const data = err.response.data
+      if (typeof data === 'string') {
+        createUserError.value = data
+      } else if (data.detail || data.error) {
+        createUserError.value = data.detail || data.error
+      } else {
+        const messages = []
+        for (const key in data) {
+          const val = data[key]
+          if (Array.isArray(val)) {
+            messages.push(val.join(' '))
+          } else if (typeof val === 'string') {
+            messages.push(val)
+          }
+        }
+        createUserError.value = messages.join(' ') || 'Не удалось создать аккаунт'
+      }
+    } else {
+      createUserError.value = 'Не удалось создать аккаунт'
+    }
+  } finally {
+    creatingUser.value = false
   }
 }
 
@@ -571,6 +663,26 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+.quick-create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.quick-create-inputs {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.quick-create-hint {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -667,8 +779,31 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
+.success-message {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  background: rgba(76, 175, 80, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(76, 175, 80, 0.4);
+  border-radius: 12px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .error-icon {
   font-size: 1.2rem;
+}
+
+.success-icon {
+  font-size: 1.2rem;
+}
+
+.inline-message {
+  margin-bottom: 0;
 }
 
 .table-container {
@@ -1039,6 +1174,11 @@ onMounted(() => {
     flex-direction: column;
     align-items: stretch;
     gap: 12px;
+  }
+
+  .quick-create-inputs {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .filter-group {
