@@ -25,7 +25,7 @@
               <input
                 v-model="search"
                 type="text"
-                placeholder="Поиск по email / ФИО"
+                placeholder="Поиск по email / имени"
                 class="filter-input"
               />
             </div>
@@ -64,8 +64,8 @@
                 <th>ID</th>
                 <th>Email</th>
                 <th>Телефон</th>
-                <th>ФИО ученика</th>
-                <th>ФИО родителя</th>
+                <th>Имя ученика</th>
+                <th>Имя родителя</th>
                 <th>Роль</th>
                 <th>Действия</th>
               </tr>
@@ -132,14 +132,14 @@
 
             <div class="form-row">
               <label class="form-label">
-                <span class="label-text">🎓 ФИО ученика</span>
+                <span class="label-text">🎓 Имя ученика</span>
                 <input v-model="editForm.student_full_name" type="text" class="form-input" />
               </label>
             </div>
 
             <div class="form-row">
               <label class="form-label">
-                <span class="label-text">👨‍👩‍👧 ФИО родителя</span>
+                <span class="label-text">👨‍👩‍👧 Имя родителя</span>
                 <input v-model="editForm.parent_full_name" type="text" class="form-input" />
               </label>
             </div>

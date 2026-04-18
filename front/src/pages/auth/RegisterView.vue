@@ -42,13 +42,13 @@
           <div class="form-group">
             <label class="form-label">
               <span class="label-icon">🎓</span>
-              <span>ФИО ученика</span>
+              <span>Имя ученика</span>
             </label>
             <input
               v-model="studentFullName"
               type="text"
               required
-              placeholder="Иванов Иван Иванович"
+              placeholder="Иван"
               class="form-input"
             />
           </div>
@@ -56,13 +56,13 @@
           <div class="form-group">
             <label class="form-label">
               <span class="label-icon">👨‍👩‍👧</span>
-              <span>ФИО родителя</span>
+              <span>Имя родителя</span>
             </label>
             <input
               v-model="parentFullName"
               type="text"
               required
-              placeholder="Иванова Мария Петровна"
+              placeholder="Мария"
               class="form-input"
             />
           </div>

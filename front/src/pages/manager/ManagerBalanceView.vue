@@ -23,7 +23,7 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Email или ФИО ученика"
+            placeholder="Email или имя ученика"
             class="search-input"
             @keyup.enter="loadAllStudents"
           />
@@ -51,7 +51,7 @@
               <tr>
                 <th>ID</th>
                 <th>Email</th>
-                <th>ФИО</th>
+                <th>Имя ученика</th>
                 <th>Роль</th>
                 <th>Баланс</th>
               </tr>

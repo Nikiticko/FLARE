@@ -56,22 +56,22 @@
           </div>
 
           <div class="form-group">
-            <label for="student_full_name">ФИО ученика</label>
+            <label for="student_full_name">Имя ученика</label>
             <input
               id="student_full_name"
               v-model="formData.student_full_name"
               type="text"
-              placeholder="Иванов Иван Иванович"
+              placeholder="Иван"
             />
           </div>
 
           <div class="form-group">
-            <label for="parent_full_name">ФИО родителя</label>
+            <label for="parent_full_name">Имя родителя</label>
             <input
               id="parent_full_name"
               v-model="formData.parent_full_name"
               type="text"
-              placeholder="Иванова Мария Петровна"
+              placeholder="Мария"
             />
           </div>
 

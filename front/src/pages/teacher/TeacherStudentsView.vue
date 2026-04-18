@@ -21,7 +21,7 @@
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="Поиск по email, ФИО ученика или родителя"
+            placeholder="Поиск по email, имени ученика или родителя"
             class="search-input"
             @input="handleSearch"
           />
@@ -54,8 +54,8 @@
               <tr>
                 <th>ID</th>
                 <th>Email</th>
-                <th>ФИО ученика</th>
-                <th>ФИО родителя</th>
+                <th>Имя ученика</th>
+                <th>Имя родителя</th>
                 <th>Телефон</th>
                 <th>Действия</th>
               </tr>
