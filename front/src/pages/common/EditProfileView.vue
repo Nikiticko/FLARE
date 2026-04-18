@@ -6,31 +6,35 @@
         <h1>Редактирование профиля</h1>
       </div>
       <div class="profile-form card">
-        <form @submit.prevent="handleSubmit">
+        <form @submit.prevent="handleSubmit" autocomplete="off">
           <div class="avatar-section">
-            <div class="avatar-preview" @click="openAvatarPicker">
-              <img v-if="displayAvatar" :src="displayAvatar" alt="Аватар" class="avatar-image" />
-              <span v-else class="avatar-placeholder">Добавить аватар</span>
+            <div class="avatar-header">
+              <div class="avatar-preview" @click="openAvatarPicker">
+                <img v-if="displayAvatar" :src="displayAvatar" alt="Аватар" class="avatar-image" />
+                <span v-else class="avatar-placeholder">Аватар</span>
+              </div>
+              <div class="avatar-controls">
+                <input
+                  ref="avatarInput"
+                  type="file"
+                  class="avatar-input-hidden"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  @change="handleAvatarSelect"
+                />
+                <div class="avatar-actions">
+                  <button type="button" class="btn-avatar" @click="openAvatarPicker">Выбрать</button>
+                  <button
+                    v-if="displayAvatar"
+                    type="button"
+                    class="btn-avatar btn-avatar-remove"
+                    @click="handleAvatarRemove"
+                  >
+                    Удалить
+                  </button>
+                </div>
+                <p class="avatar-hint">JPG, PNG, WEBP до 2 МБ. GIF до 5 МБ.</p>
+              </div>
             </div>
-            <input
-              ref="avatarInput"
-              type="file"
-              class="avatar-input-hidden"
-              accept="image/jpeg,image/png,image/webp,image/gif"
-              @change="handleAvatarSelect"
-            />
-            <div class="avatar-actions">
-              <button type="button" class="btn-avatar" @click="openAvatarPicker">Выбрать файл</button>
-              <button
-                v-if="displayAvatar"
-                type="button"
-                class="btn-avatar btn-avatar-remove"
-                @click="handleAvatarRemove"
-              >
-                Удалить
-              </button>
-            </div>
-            <p class="avatar-hint">Фото: JPG/PNG/WEBP до 2 МБ (будет приведено к 512x512). GIF: до 5 МБ и до 512x512.</p>
             <p v-if="avatarError" class="error-message">{{ avatarError }}</p>
           </div>
 
@@ -51,9 +55,9 @@
               id="phone"
               v-model="formData.phone"
               type="text"
-              placeholder="+7... или @username / ссылка на соцсеть"
+              placeholder="+7... / @username"
             />
-            <div class="field-hint">Укажите телефон или соцсеть. Если это соцсеть, напишите username или ссылку.</div>
+            <div class="field-hint">Телефон или соцсеть.</div>
           </div>
 
           <div class="form-group">
@@ -86,6 +90,15 @@
               {{ showPasswordForm ? 'Скрыть' : 'Изменить пароль' }}
             </button>
             <div v-if="showPasswordForm" class="password-form">
+              <input
+                type="text"
+                name="profile_email"
+                :value="formData.email"
+                autocomplete="username"
+                class="password-autofill-trap"
+                tabindex="-1"
+                aria-hidden="true"
+              />
               <div class="form-group">
                 <label for="old_password">Текущий пароль</label>
                 <div class="password-row" :class="{ 'password-verified': oldPasswordVerified }">
@@ -93,9 +106,12 @@
                     <input
                       id="old_password"
                       v-model="passwordForm.old_password"
+                      name="old_password_check"
                       :type="showOldPassword ? 'text' : 'password'"
+                      autocomplete="current-password"
                       placeholder="Введите текущий пароль"
                       :disabled="oldPasswordVerified"
+                      @input="handleOldPasswordInput"
                     />
                     <button
                       type="button"
@@ -118,8 +134,10 @@
                   <input
                     id="new_password"
                     v-model="passwordForm.new_password"
+                    name="new_password"
                     :type="showNewPassword ? 'text' : 'password'"
                     minlength="8"
+                    autocomplete="new-password"
                     placeholder="Минимум 8 символов"
                     :disabled="!oldPasswordVerified"
                   />
@@ -353,12 +371,23 @@ const handleSubmit = async () => {
 
 const togglePasswordForm = () => {
   showPasswordForm.value = !showPasswordForm.value
-  if (!showPasswordForm.value) {
-    passwordForm.value = { old_password: '', new_password: '' }
+  resetPasswordState()
+}
+
+const resetPasswordState = () => {
+  passwordForm.value = { old_password: '', new_password: '' }
+  oldPasswordVerified.value = false
+  showOldPassword.value = false
+  showNewPassword.value = false
+  passwordError.value = null
+  passwordSuccess.value = null
+}
+
+const handleOldPasswordInput = () => {
+  if (oldPasswordVerified.value) {
     oldPasswordVerified.value = false
-    passwordError.value = null
-    passwordSuccess.value = null
   }
+  passwordError.value = null
 }
 
 const handleVerifyPassword = async () => {
@@ -390,8 +419,7 @@ const handleChangePassword = async () => {
       new_password: passwordForm.value.new_password,
     })
     passwordSuccess.value = 'Пароль успешно изменён'
-    passwordForm.value = { old_password: '', new_password: '' }
-    oldPasswordVerified.value = false
+    resetPasswordState()
     showPasswordForm.value = false
   } catch (err) {
     const data = err?.response?.data
@@ -430,17 +458,17 @@ onUnmounted(() => {
 .profile-content {
   max-width: 800px;
   margin: 0 auto;
-  padding: 32px 24px 48px;
+  padding: 28px 24px 40px;
   position: relative;
   z-index: 1;
 }
 
 .page-header {
-  margin-bottom: 32px;
+  margin-bottom: 22px;
 }
 
 .page-header h1 {
-  font-size: 2rem;
+  font-size: 1.7rem;
   margin: 0;
   color: #FFFFFF;
   font-weight: 900;
@@ -451,7 +479,7 @@ onUnmounted(() => {
   background: rgba(40, 40, 40, 0.8);
   border: 3px solid #FFD700;
   border-radius: 12px;
-  padding: 32px;
+  padding: 26px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
   transition: all 0.3s ease;
 }
@@ -463,12 +491,24 @@ onUnmounted(() => {
 }
 
 .avatar-section {
-  margin-bottom: 28px;
+  margin-bottom: 24px;
+}
+
+.avatar-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.avatar-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .avatar-preview {
-  width: 120px;
-  height: 120px;
+  width: 104px;
+  height: 104px;
   border-radius: 50%;
   border: 2px solid #FFD700;
   background: rgba(255, 255, 255, 0.12);
@@ -487,7 +527,7 @@ onUnmounted(() => {
 
 .avatar-placeholder {
   text-align: center;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.7);
   padding: 0 10px;
 }
@@ -499,16 +539,16 @@ onUnmounted(() => {
 .avatar-actions {
   display: flex;
   gap: 10px;
-  margin-top: 12px;
 }
 
 .btn-avatar {
-  padding: 8px 14px;
+  padding: 8px 12px;
   background: rgba(255, 215, 0, 0.2);
   color: #FFD700;
   border: 1px solid #FFD700;
   border-radius: 8px;
   cursor: pointer;
+  font-size: 0.88rem;
 }
 
 .btn-avatar-remove {
@@ -518,33 +558,33 @@ onUnmounted(() => {
 }
 
 .avatar-hint {
-  margin-top: 10px;
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
 .form-group {
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .form-group input {
   width: 100%;
-  padding: 14px 18px;
+  padding: 12px 14px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   background: rgba(255, 255, 255, 0.15);
   backdrop-filter: blur(10px);
   color: #ffffff;
-  font-size: 1rem;
+  font-size: 0.94rem;
   transition: all 0.3s ease;
   box-sizing: border-box;
 }
@@ -554,16 +594,16 @@ onUnmounted(() => {
 }
 
 .field-hint {
-  margin-top: 8px;
+  margin-top: 6px;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   line-height: 1.4;
 }
 
 
 .password-section {
-  margin-top: 32px;
-  padding-top: 24px;
+  margin-top: 26px;
+  padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
@@ -587,11 +627,19 @@ onUnmounted(() => {
 }
 
 .password-form {
-  margin-top: 20px;
-  padding: 20px;
+  margin-top: 16px;
+  padding: 18px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 10px;
   border: 1px solid rgba(255, 215, 0, 0.2);
+}
+
+.password-autofill-trap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .password-row {
@@ -697,7 +745,7 @@ onUnmounted(() => {
 }
 
 .btn-save-password {
-  margin-top: 16px;
+  margin-top: 12px;
   padding: 10px 20px;
   background: #FFD700;
   color: #1A1A1A;
@@ -724,7 +772,7 @@ onUnmounted(() => {
 .form-actions {
   display: flex;
   gap: 12px;
-  margin-top: 32px;
+  margin-top: 24px;
 }
 
 .btn-save {
@@ -803,20 +851,24 @@ onUnmounted(() => {
   }
 
   .page-header h1 {
-    font-size: 1.5rem;
+    font-size: 1.45rem;
   }
 
   .card {
-    padding: 24px;
+    padding: 22px;
+  }
+
+  .avatar-header {
+    align-items: flex-start;
   }
 
   .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .form-group input {
-    padding: 12px 16px;
-    font-size: 0.95rem;
+    padding: 11px 14px;
+    font-size: 0.92rem;
   }
 
   .form-actions {
@@ -832,6 +884,21 @@ onUnmounted(() => {
 }
 
 @media (max-width: 480px) {
+  .avatar-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .avatar-controls {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .avatar-actions {
+    flex-direction: column;
+  }
+
   .password-row-top {
     flex-wrap: wrap;
   }
@@ -845,24 +912,24 @@ onUnmounted(() => {
   }
 
   .page-header h1 {
-    font-size: 1.3rem;
+    font-size: 1.25rem;
   }
 
   .card {
-    padding: 20px;
+    padding: 18px;
   }
 
   .form-group {
-    margin-bottom: 18px;
+    margin-bottom: 14px;
   }
 
   .form-group label {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
   }
 
   .form-group input {
-    padding: 10px 14px;
-    font-size: 0.9rem;
+    padding: 10px 12px;
+    font-size: 0.88rem;
   }
 
   .btn-save,
