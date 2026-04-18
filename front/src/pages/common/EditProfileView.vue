@@ -46,13 +46,14 @@
           </div>
 
           <div class="form-group">
-            <label for="phone">Телефон</label>
+            <label for="phone">Контакт</label>
             <input
               id="phone"
               v-model="formData.phone"
               type="text"
-              placeholder="+7..."
+              placeholder="+7... или @username / ссылка на соцсеть"
             />
+            <div class="field-hint">Укажите телефон или соцсеть. Если это соцсеть, напишите username или ссылку.</div>
           </div>
 
           <div class="form-group">
@@ -550,6 +551,13 @@ onUnmounted(() => {
 
 .form-group input::placeholder {
   color: rgba(255, 255, 255, 0.5);
+}
+
+.field-hint {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.82rem;
+  line-height: 1.4;
 }
 
 

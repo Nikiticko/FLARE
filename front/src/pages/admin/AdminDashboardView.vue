@@ -63,7 +63,7 @@
               <tr>
                 <th>ID</th>
                 <th>Email</th>
-                <th>Телефон</th>
+                <th>Контакт</th>
                 <th>Имя ученика</th>
                 <th>Имя родителя</th>
                 <th>Роль</th>
@@ -125,8 +125,9 @@
 
             <div class="form-row">
               <label class="form-label">
-                <span class="label-text">📱 Телефон</span>
-                <input v-model="editForm.phone" type="text" class="form-input" />
+                <span class="label-text">📱 Контакт</span>
+                <input v-model="editForm.phone" type="text" class="form-input" placeholder="+7... или @username / ссылка" />
+                <span class="field-hint">Телефон или соцсеть. Для соцсети укажите username или ссылку.</span>
               </label>
             </div>
 
@@ -929,6 +930,12 @@ onMounted(() => {
   font-weight: 600;
   font-size: 0.9rem;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.field-hint {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  line-height: 1.4;
 }
 
 .form-input {

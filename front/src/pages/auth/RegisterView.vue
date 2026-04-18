@@ -7,7 +7,6 @@
         <div class="auth-header">
           <div class="auth-icon">✨</div>
           <h1 class="auth-title">Регистрация</h1>
-          <p class="auth-subtitle">Создайте новый аккаунт</p>
         </div>
 
         <form class="auth-form" @submit.prevent="handleSubmit">
@@ -28,13 +27,13 @@
           <div class="form-group">
             <label class="form-label">
               <span class="label-icon">📱</span>
-              <span>Телефон</span>
+              <span>Контакт</span>
             </label>
             <input
               v-model="phone"
               type="text"
               required
-              placeholder="+7..."
+              placeholder="+7... / @username"
               class="form-input"
             />
           </div>
@@ -226,7 +225,7 @@ const handleSubmit = async () => {
 
 .auth-header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 18px;
 }
 
 .auth-icon {
@@ -246,24 +245,17 @@ const handleSubmit = async () => {
 }
 
 .auth-title {
-  font-size: 1.9rem;
+  font-size: 1.7rem;
   font-weight: 900;
   margin: 0 0 4px 0;
   color: #FFFFFF;
   letter-spacing: -1px;
 }
 
-.auth-subtitle {
-  font-size: 0.85rem;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 400;
-}
-
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   box-sizing: border-box;
 }
@@ -271,7 +263,7 @@ const handleSubmit = async () => {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .form-label {
@@ -280,7 +272,7 @@ const handleSubmit = async () => {
   gap: 8px;
   color: #FFFFFF;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .label-icon {
@@ -288,14 +280,14 @@ const handleSubmit = async () => {
 }
 
 .form-input {
-  padding: 12px 16px;
+  padding: 11px 14px;
   border-radius: 8px;
   border: 2px solid rgba(255, 215, 0, 0.3);
   width: 100%;
   box-sizing: border-box;
   background: rgba(40, 45, 60, 0.8);
   color: #FFFFFF;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.3s ease;
   font-family: inherit;
@@ -471,7 +463,7 @@ const handleSubmit = async () => {
   }
 
   .auth-header {
-    margin-bottom: 24px;
+    margin-bottom: 18px;
   }
 
   .auth-icon {
@@ -480,25 +472,21 @@ const handleSubmit = async () => {
   }
 
   .auth-title {
-    font-size: 1.75rem;
-  }
-
-  .auth-subtitle {
-    font-size: 0.85rem;
+    font-size: 1.55rem;
   }
 
   .auth-form {
-    gap: 14px;
+    gap: 12px;
     width: 100%;
   }
 
   .form-label {
-    font-size: 0.85rem;
+    font-size: 0.82rem;
   }
 
   .form-input {
-    padding: 12px 14px;
-    font-size: 0.9rem;
+    padding: 11px 13px;
+    font-size: 0.88rem;
     width: 100%;
   }
 
@@ -528,16 +516,12 @@ const handleSubmit = async () => {
   }
 
   .auth-title {
-    font-size: 1.5rem;
-  }
-
-  .auth-subtitle {
-    font-size: 0.8rem;
+    font-size: 1.35rem;
   }
 
   .form-input {
     padding: 10px 12px;
-    font-size: 0.85rem;
+    font-size: 0.84rem;
   }
 
   .btn-submit {
