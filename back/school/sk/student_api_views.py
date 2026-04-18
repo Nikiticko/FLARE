@@ -1,4 +1,3 @@
-from django.db import transaction
 from rest_framework import generics, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -19,7 +18,6 @@ from .student_serializers import (
     StudentLessonSerializer,
     StudentBalanceSerializer,
     StudentPaymentSerializer,
-    StudentPaymentCreateSerializer,
     StudentProfileSerializer,
     StudentClientRequestCreateSerializer,
 )
@@ -41,25 +39,19 @@ def _normalized_avatar_url(user):
     return f"/media/{raw_url.lstrip('/')}"
 
 
-# ===== UNIFIED DASHBOARD =====
-
 class UnifiedDashboardAPI(APIView):
-    """
-    Унифицированный ЛК для STUDENT и APPLICANT.
-    ФИО, роль, баланс, и опционально: уровень, XP, внутренняя валюта (для STUDENT).
-    GET /api/dashboard/
-    """
+    """Unified dashboard for student and applicant roles."""
+
     permission_classes = [IsAuthenticated, IsStudentOrApplicantOrTeacherOrManagerOrAdmin]
 
     def get(self, request):
         user = request.user
         bal, _ = LessonBalance.objects.get_or_create(student=user)
-        
-        # StudentProfile опционален - может отсутствовать у абитуриентов
+
         profile = None
-        if hasattr(user, 'student_profile'):
+        if hasattr(user, "student_profile"):
             profile = user.student_profile
-        
+
         data = {
             "id": user.id,
             "email": user.email,
@@ -76,13 +68,9 @@ class UnifiedDashboardAPI(APIView):
         return Response(ser.data)
 
 
-# ===== DASHBOARD =====
-
 class StudentDashboardAPI(APIView):
-    """
-    ЛК ученика: ФИО, роль, баланс, уровень, XP, внутренняя валюта.
-    GET /api/student/dashboard/
-    """
+    """Legacy student dashboard endpoint."""
+
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
 
     def get(self, request):
@@ -106,13 +94,7 @@ class StudentDashboardAPI(APIView):
         return Response(ser.data)
 
 
-# ===== COURSES =====
-
 class StudentCoursesListAPI(generics.ListAPIView):
-    """
-    Список доступных курсов для ученика.
-    GET /api/student/courses/
-    """
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
     serializer_class = StudentCourseSerializer
 
@@ -120,13 +102,7 @@ class StudentCoursesListAPI(generics.ListAPIView):
         return Course.objects.filter(is_active=True).order_by("id")
 
 
-# ===== LESSONS (расписание + история) =====
-
 class StudentLessonsListAPI(generics.ListAPIView):
-    """
-    Список уроков ученика/абитуриента.
-    GET /api/student/lessons/?status=PLANNED|DONE|CANCELLED&ordering=scheduled_at
-    """
     permission_classes = [IsAuthenticated, IsStudentOrApplicantOrTeacherOrManagerOrAdmin]
     serializer_class = StudentLessonSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -138,13 +114,7 @@ class StudentLessonsListAPI(generics.ListAPIView):
         return Lesson.objects.select_related("teacher").filter(student=self.request.user)
 
 
-# ===== BALANCE =====
-
 class StudentBalanceAPI(APIView):
-    """
-    Баланс ученика.
-    GET /api/student/balance/
-    """
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
 
     def get(self, request):
@@ -153,13 +123,9 @@ class StudentBalanceAPI(APIView):
         return Response(ser.data)
 
 
-# ===== PAYMENTS (история + создание заявки) =====
-
 class StudentPaymentsListAPI(generics.ListAPIView):
-    """
-    История оплат ученика.
-    GET /api/student/payments/
-    """
+    """Payment history only. Payment creation now goes through /api/payments/."""
+
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
     serializer_class = StudentPaymentSerializer
 
@@ -167,42 +133,7 @@ class StudentPaymentsListAPI(generics.ListAPIView):
         return Payment.objects.filter(student=self.request.user).order_by("-paid_at")
 
 
-class StudentCreatePaymentAPI(APIView):
-    """
-    Создание записи оплаты учеником (кнопка "Оплатить").
-    POST /api/student/payments/create/
-    Body: {"course_id": 1, "amount": "5000.00", "package_name": "8 занятий Python"}
-    """
-    permission_classes = [IsAuthenticated, IsStudentOrAdmin]
-
-    @transaction.atomic
-    def post(self, request):
-        ser = StudentPaymentCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        course_id = ser.validated_data["course_id"]
-        amount = ser.validated_data["amount"]
-        package_name = ser.validated_data.get("package_name") or ""
-
-        payment = Payment.objects.create(
-            student=request.user,
-            amount=amount,
-            package_name=package_name or f"Оплата курса #{course_id}",
-            confirmed=False,   # подтверждает менеджер/админ
-        )
-
-        return Response(StudentPaymentSerializer(payment).data, status=201)
-
-
-# ===== SEASON SUMMARY =====
-
 class StudentSeasonSummaryAPI(APIView):
-    """
-    Краткая инфа для кнопки "Система сезонов" в ЛК:
-    уровень, XP, внутренняя валюта.
-    На фронте эта кнопка может вести на отдельную страницу,
-    где уже будут сложные механики.
-    GET /api/student/season/summary/
-    """
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
 
     def get(self, request):
@@ -211,23 +142,19 @@ class StudentSeasonSummaryAPI(APIView):
         return Response(ser.data)
 
 
-# ===== ОБРАЩЕНИЯ К МЕНЕДЖЕРУ =====
-
 class StudentCreateClientRequestAPI(APIView):
-    """
-    Создание обращения к менеджеру учеником.
-    POST /api/student/requests/create/
-    Body: {"comment": "Текст комментария (необязательно)"}
-    """
     permission_classes = [IsAuthenticated, IsStudentOrApplicantOrTeacherOrManagerOrAdmin]
 
     def post(self, request):
-        ser = StudentClientRequestCreateSerializer(data=request.data, context={'request': request})
+        ser = StudentClientRequestCreateSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         request_obj = ser.save()
-        return Response({
-            "id": request_obj.id,
-            "comment": request_obj.comment,
-            "status": request_obj.status,
-            "created_at": request_obj.created_at,
-        }, status=201)
+        return Response(
+            {
+                "id": request_obj.id,
+                "comment": request_obj.comment,
+                "status": request_obj.status,
+                "created_at": request_obj.created_at,
+            },
+            status=201,
+        )
