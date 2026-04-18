@@ -1,4 +1,3 @@
-// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -22,26 +21,12 @@ import PaymentCancelView from '../pages/common/PaymentCancelView.vue'
 import AboutServiceView from '../pages/common/AboutServiceView.vue'
 import AboutTeacherView from '../pages/common/AboutTeacherView.vue'
 import PublicOfferView from '../pages/common/PublicOfferView.vue'
+import CookiePolicyView from '../pages/common/CookiePolicyView.vue'
 
 const routes = [
-  {
-    path: '/',
-    name: 'home',
-    component: LandingPage,
-    meta: { guestOnly: false },
-  },
-  {
-    path: '/login',
-    name: 'login',
-    component: LoginView,
-    meta: { guestOnly: true },
-  },
-  {
-    path: '/register',
-    name: 'register',
-    component: RegisterView,
-    meta: { guestOnly: true },
-  },
+  { path: '/', name: 'home', component: LandingPage, meta: { guestOnly: false } },
+  { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
+  { path: '/register', name: 'register', component: RegisterView, meta: { guestOnly: true } },
   {
     path: '/dashboard',
     name: 'dashboard',
@@ -127,12 +112,6 @@ const routes = [
     meta: { requiresAuth: true, roles: ['teacher'] },
   },
   {
-    path: '/student',
-    name: 'student-dashboard',
-    component: DashboardView,
-    meta: { requiresAuth: true, roles: ['student'] },
-  },
-  {
     path: '/payment',
     name: 'payment-calculator',
     component: PaymentCalculatorView,
@@ -168,7 +147,12 @@ const routes = [
     component: PublicOfferView,
     meta: { guestOnly: false },
   },
-  // Catch-all маршрут для 404 - перенаправляет на главную
+  {
+    path: '/cookie-policy',
+    name: 'cookie-policy',
+    component: CookiePolicyView,
+    meta: { guestOnly: false },
+  },
   {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
@@ -181,14 +165,13 @@ const router = createRouter({
   routes,
 })
 
-// Названия страниц для title
 const pageTitles = {
-  'home': 'F.L.A.R.E. — Главная',
+  home: 'F.L.A.R.E. — Главная',
   'about-service': 'О сервисе — F.L.A.R.E.',
   'about-teacher': 'О преподавателе — F.L.A.R.E.',
-  'login': 'Вход — F.L.A.R.E.',
-  'register': 'Регистрация — F.L.A.R.E.',
-  'dashboard': 'Личный кабинет — F.L.A.R.E.',
+  login: 'Вход — F.L.A.R.E.',
+  register: 'Регистрация — F.L.A.R.E.',
+  dashboard: 'Личный кабинет — F.L.A.R.E.',
   'applicant-dashboard': 'Личный кабинет — F.L.A.R.E.',
   'student-dashboard': 'Личный кабинет — F.L.A.R.E.',
   'edit-profile': 'Редактирование профиля — F.L.A.R.E.',
@@ -206,36 +189,27 @@ const pageTitles = {
   'payment-success': 'Оплата успешна — F.L.A.R.E.',
   'payment-cancel': 'Оплата отменена — F.L.A.R.E.',
   'public-offer': 'Договор публичной оферты — F.L.A.R.E.',
+  'cookie-policy': 'Политика cookie — F.L.A.R.E.',
 }
 
 router.beforeEach(async (to, from, next) => {
   const auth = useAuthStore()
 
-  // страница только для гостей (login/register)
+  if (!auth.initialized) {
+    await auth.initialize()
+  }
+
   if (to.meta.guestOnly && auth.isAuthenticated) {
     return next({ name: 'home' })
   }
 
-  // требуется авторизация
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return next({ name: 'login', query: { redirect: to.fullPath } })
   }
 
-  // Если требуется авторизация и есть токен, но пользователь еще не загружен
-  // дожидаемся загрузки пользователя перед проверкой роли
-  if (to.meta.requiresAuth && auth.isAuthenticated && !auth.user) {
-    try {
-      await auth.fetchMe()
-    } catch (err) {
-      // Если не удалось загрузить пользователя, редиректим на логин
-      return next({ name: 'login', query: { redirect: to.fullPath } })
-    }
-  }
-
-  // ограничение по ролям
   if (to.meta.roles && to.meta.roles.length > 0) {
     const role = auth.normalizedRole
-    const allowed = to.meta.roles.map((r) => r.toLowerCase())
+    const allowed = to.meta.roles.map((item) => item.toLowerCase())
     if (!allowed.includes((role || '').toLowerCase())) {
       return next({ name: 'home' })
     }
@@ -244,12 +218,10 @@ router.beforeEach(async (to, from, next) => {
   return next()
 })
 
-// Обновление title при переходе на страницу
 router.afterEach((to) => {
   const title = pageTitles[to.name] || 'F.L.A.R.E.'
   document.title = title
-  
-  // Обновление favicon (можно менять для разных страниц, но пока оставим один)
+
   let favicon = document.querySelector("link[rel='icon']")
   if (!favicon) {
     favicon = document.createElement('link')

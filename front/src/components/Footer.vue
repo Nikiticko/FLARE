@@ -1,4 +1,3 @@
-<!-- src/components/Footer.vue -->
 <template>
   <footer class="footer">
     <div class="footer-content">
@@ -23,6 +22,11 @@
           <li>
             <RouterLink :to="{ name: 'public-offer' }" class="footer-link">
               Договор публичной оферты
+            </RouterLink>
+          </li>
+          <li>
+            <RouterLink :to="{ name: 'cookie-policy' }" class="footer-link">
+              Политика cookie
             </RouterLink>
           </li>
         </ul>
@@ -116,10 +120,6 @@ import { RouterLink } from 'vue-router'
   color: #FFD700;
 }
 
-.footer-link-icon {
-  font-size: 1rem;
-}
-
 .footer-description {
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.8);
@@ -128,7 +128,6 @@ import { RouterLink } from 'vue-router'
   padding: 0;
 }
 
-/* Адаптивность */
 @media (max-width: 1200px) {
   .footer-content {
     grid-template-columns: repeat(2, 1fr);

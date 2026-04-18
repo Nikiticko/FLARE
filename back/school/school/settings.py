@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
 import os
 import pymysql
 from dotenv import load_dotenv
@@ -83,6 +84,13 @@ else:
     # Fallback - пустой список (будет ошибка, но это лучше чем разрешить все)
     CORS_ALLOWED_ORIGINS = []
 
+if os.getenv("CSRF_TRUSTED_ORIGINS", "").strip():
+    CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
+elif DEBUG or not has_env_file:
+    CSRF_TRUSTED_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173']
+else:
+    CSRF_TRUSTED_ORIGINS = []
+
 CORS_ALLOW_CREDENTIALS = True
 
 # Разрешаем все необходимые заголовки для JWT и других запросов
@@ -110,7 +118,7 @@ CORS_ALLOW_METHODS = [
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "accounts.authentication.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -120,6 +128,23 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+}
+
+AUTH_COOKIE_ACCESS_NAME = os.getenv("AUTH_COOKIE_ACCESS_NAME", "access_token")
+AUTH_COOKIE_REFRESH_NAME = os.getenv("AUTH_COOKIE_REFRESH_NAME", "refresh_token")
+AUTH_COOKIE_PATH = os.getenv("AUTH_COOKIE_PATH", "/")
+AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
+AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "False") == "True"
+
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SECURE = os.getenv("CSRF_COOKIE_SECURE", str(AUTH_COOKIE_SECURE)) == "True"
+CSRF_COOKIE_SAMESITE = os.getenv("CSRF_COOKIE_SAMESITE", AUTH_COOKIE_SAMESITE)
+CSRF_COOKIE_PATH = os.getenv("CSRF_COOKIE_PATH", "/")
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=int(os.getenv("JWT_ACCESS_LIFETIME_MINUTES", "15"))),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=int(os.getenv("JWT_REFRESH_LIFETIME_DAYS", "30"))),
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 TEMPLATES = [

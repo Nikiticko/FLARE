@@ -193,9 +193,9 @@ const closeAllMenus = () => {
   showUserMenu.value = false
 }
 
-const handleLogout = () => {
+const handleLogout = async () => {
   closeAllMenus()
-  auth.logout()
+  await auth.logout()
   router.push({ name: 'home' })
 }
 

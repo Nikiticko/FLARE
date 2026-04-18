@@ -1,43 +1,67 @@
-// src/api/http.js
 import axios from 'axios'
 
-// Используем переменную окружения или дефолтное значение для dev режима
-// В dev режиме: VITE_API_BASE_URL=http://127.0.0.1:8000/api (или будет использован дефолт)
-// В prod: /api (будет проксироваться через Nginx)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api')
 
-// Для refresh токена используем тот же baseURL, что и для основного apiClient
-const getRefreshURL = () => {
-  return `${API_BASE_URL}/token/refresh/`
-}
+const getRefreshURL = () => `${API_BASE_URL}/token/refresh/`
+const getCsrfURL = () => `${API_BASE_URL}/auth/csrf/`
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: false,
+  withCredentials: true,
 })
 
-// подставляем access-токен из localStorage
-apiClient.interceptors.request.use((config) => {
-  const access = localStorage.getItem('access')
-  if (access) {
-    config.headers.Authorization = `Bearer ${access}`
+const readCookie = (name) => {
+  if (typeof document === 'undefined') {
+    return null
   }
+
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`))
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+let csrfRequest = null
+
+export async function ensureCsrfCookie() {
+  const existing = readCookie('csrftoken')
+  if (existing) {
+    return existing
+  }
+
+  if (!csrfRequest) {
+    csrfRequest = axios.get(getCsrfURL(), { withCredentials: true })
+      .finally(() => {
+        csrfRequest = null
+      })
+  }
+
+  await csrfRequest
+  return readCookie('csrftoken')
+}
+
+apiClient.interceptors.request.use(async (config) => {
+  const method = String(config.method || 'get').toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = readCookie('csrftoken') || await ensureCsrfCookie()
+    if (csrfToken) {
+      config.headers['X-CSRFToken'] = csrfToken
+    }
+  }
+
   return config
 })
 
-// Обработка 401 ошибок - автоматическое обновление токена
 let isRefreshing = false
 let failedQueue = []
 
-const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
+const processQueue = (error) => {
+  failedQueue.forEach(({ resolve, reject }) => {
     if (error) {
-      prom.reject(error)
+      reject(error)
     } else {
-      prom.resolve(token)
+      resolve()
     }
   })
-  
   failedQueue = []
 }
 
@@ -45,88 +69,47 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config
+    const requestUrl = String(originalRequest?.url || '')
 
-    // Если ошибка 401 и это не запрос на обновление токена
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (
+      error.response?.status === 401 &&
+      originalRequest &&
+      !originalRequest._retry &&
+      !requestUrl.includes('/auth/login/') &&
+      !requestUrl.includes('/auth/register/') &&
+      !requestUrl.includes('/auth/admin-login/') &&
+      !requestUrl.includes('/auth/me/') &&
+      !requestUrl.includes('/token/refresh/')
+    ) {
       if (isRefreshing) {
-        // Если уже идет обновление токена, добавляем запрос в очередь
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
-        })
-          .then(token => {
-            originalRequest.headers.Authorization = `Bearer ${token}`
-            return apiClient(originalRequest)
-          })
-          .catch(err => {
-            return Promise.reject(err)
-          })
+        }).then(() => apiClient(originalRequest))
       }
 
       originalRequest._retry = true
       isRefreshing = true
 
-      const refresh = localStorage.getItem('refresh')
-      if (!refresh) {
-        // Нет refresh токена - очищаем все и выходим
-        localStorage.removeItem('access')
-        localStorage.removeItem('refresh')
-        processQueue(error, null)
-        isRefreshing = false
-        
-        // Редиректим на страницу логина, если не на странице логина/регистрации
-        if (typeof window !== 'undefined' && window.location) {
-          const currentPath = window.location.pathname
-          if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
-            setTimeout(() => {
-              window.location.href = '/login'
-            }, 100)
-          }
-        }
-        
-        return Promise.reject(error)
-      }
-
       try {
-        // Пытаемся обновить токен
-        // Используем прямой axios, чтобы избежать перехвата через interceptor
-        const response = await axios.post(
-          getRefreshURL(),
-          { refresh }
-        )
-        
-        const { access } = response.data
-        localStorage.setItem('access', access)
-        
-        // Обновляем заголовок в оригинальном запросе
-        originalRequest.headers.Authorization = `Bearer ${access}`
-        
-        // Обрабатываем очередь
-        processQueue(null, access)
-        isRefreshing = false
-        
-        // Повторяем оригинальный запрос
+        await ensureCsrfCookie()
+        const csrfToken = readCookie('csrftoken')
+        const headers = csrfToken ? { 'X-CSRFToken': csrfToken } : undefined
+        await axios.post(getRefreshURL(), {}, { withCredentials: true, headers })
+        processQueue(null)
         return apiClient(originalRequest)
       } catch (refreshError) {
-        // Не удалось обновить токен - очищаем все
-        localStorage.removeItem('access')
-        localStorage.removeItem('refresh')
-        processQueue(refreshError, null)
-        isRefreshing = false
-        
-        // Обновляем состояние auth store, если он доступен
-        // Используем динамический импорт, чтобы избежать циклических зависимостей
+        processQueue(refreshError)
         if (typeof window !== 'undefined' && window.location) {
-          // Редиректим на страницу логина только если мы не на странице логина/регистрации
           const currentPath = window.location.pathname
           if (!currentPath.includes('/login') && !currentPath.includes('/register')) {
-            // Используем setTimeout, чтобы избежать проблем с навигацией во время обработки ошибки
             setTimeout(() => {
               window.location.href = '/login'
             }, 100)
           }
         }
-        
         return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
 

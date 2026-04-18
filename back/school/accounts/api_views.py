@@ -1,43 +1,52 @@
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
-from rest_framework import permissions, status
+from django.middleware.csrf import get_token
+
+from rest_framework import status
 from rest_framework.parsers import JSONParser, MultiPartParser, FormParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .cookie_utils import issue_tokens_for_user, set_auth_cookies, clear_auth_cookies
 from .serializers import (
-    RegisterSerializer, LoginSerializer, AdminLoginSerializer, MeSerializer, UpdateProfileSerializer,
+    RegisterSerializer,
+    LoginSerializer,
+    AdminLoginSerializer,
+    MeSerializer,
+    UpdateProfileSerializer,
     ChangePasswordSerializer,
 )
 
 User = get_user_model()
 
-def issue_tokens_for_user(user: User):
-    refresh = RefreshToken.for_user(user)
-    return {
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-    }
 
 class RegisterAPI(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ser = RegisterSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         user = ser.save()
-        # По UX можно сразу логинить — но в ТЗ достаточно регистрации:
         tokens = issue_tokens_for_user(user)
-        return Response({
-            "user": MeSerializer(user, context={"request": request}).data,
-            "tokens": tokens
-        }, status=status.HTTP_201_CREATED)
+        response = Response(
+            {"user": MeSerializer(user, context={"request": request}).data},
+            status=status.HTTP_201_CREATED,
+        )
+        return set_auth_cookies(
+            response,
+            request,
+            access_token=tokens["access"],
+            refresh_token=tokens["refresh"],
+        )
 
 
 class LoginAPI(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ser = LoginSerializer(data=request.data)
@@ -47,16 +56,20 @@ class LoginAPI(APIView):
         user = authenticate(username=email, password=password)
         if not user:
             return Response({"detail": "Неверный email или пароль"}, status=400)
+
         tokens = issue_tokens_for_user(user)
-        return Response({"user": MeSerializer(user, context={"request": request}).data, "tokens": tokens})
+        response = Response({"user": MeSerializer(user, context={"request": request}).data})
+        return set_auth_cookies(
+            response,
+            request,
+            access_token=tokens["access"],
+            refresh_token=tokens["refresh"],
+        )
 
 
 class AdminLoginAPI(APIView):
-    """
-    Спец-вход по белому списку.
-    Первые 2 из белого списка получают/повышаются до ADMIN (is_superuser/is_staff).
-    """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
         ser = AdminLoginSerializer(data=request.data)
@@ -69,22 +82,24 @@ class AdminLoginAPI(APIView):
             return Response({"detail": "Email не разрешён для админ-входа"}, status=403)
 
         user = User.objects.filter(email=email).first()
-        # текущих суперюзеров из белого списка
         count_whitelist_su = User.objects.filter(email__in=whitelist, is_superuser=True).count()
 
         if user is None:
             if count_whitelist_su >= 2:
                 return Response({"detail": "Лимит админов исчерпан"}, status=403)
             user = User.objects.create_user(
-                email=email, username=email, password=password,
-                role=User.Roles.ADMIN, is_staff=True, is_superuser=True
+                email=email,
+                username=email,
+                password=password,
+                role=User.Roles.ADMIN,
+                is_staff=True,
+                is_superuser=True,
             )
         else:
-            # проверка пароля
             auth_user = authenticate(username=email, password=password)
             if not auth_user:
                 return Response({"detail": "Неверный пароль"}, status=400)
-            if (user.email in whitelist) and not user.is_superuser:
+            if user.email in whitelist and not user.is_superuser:
                 if count_whitelist_su >= 2:
                     return Response({"detail": "Лимит админов исчерпан"}, status=403)
                 user.is_superuser = True
@@ -93,7 +108,13 @@ class AdminLoginAPI(APIView):
                 user.save()
 
         tokens = issue_tokens_for_user(user)
-        return Response({"user": MeSerializer(user, context={"request": request}).data, "tokens": tokens})
+        response = Response({"user": MeSerializer(user, context={"request": request}).data})
+        return set_auth_cookies(
+            response,
+            request,
+            access_token=tokens["access"],
+            refresh_token=tokens["refresh"],
+        )
 
 
 class MeAPI(APIView):
@@ -102,9 +123,8 @@ class MeAPI(APIView):
 
     def get(self, request):
         return Response(MeSerializer(request.user, context={"request": request}).data)
-    
+
     def patch(self, request):
-        """Обновление профиля текущего пользователя"""
         serializer = UpdateProfileSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -112,7 +132,6 @@ class MeAPI(APIView):
 
 
 class VerifyPasswordAPI(APIView):
-    """Проверка текущего пароля (без смены)"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -125,7 +144,6 @@ class VerifyPasswordAPI(APIView):
 
 
 class ChangePasswordAPI(APIView):
-    """Смена пароля текущего пользователя"""
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -136,20 +154,52 @@ class ChangePasswordAPI(APIView):
         return Response({"detail": "Пароль успешно изменён"})
 
 
-class LogoutAPI(APIView):
-    """
-    Чёрный список refresh-токена (если включишь simplejwt blacklist).
-    Можно и без него: на фронте просто удалить токены из хранилища.
-    """
+class CSRFTokenAPI(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return Response({"csrfToken": get_token(request)})
+
+
+class CookieTokenRefreshAPI(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request):
-        refresh = request.data.get("refresh")
-        if not refresh:
-            return Response({"detail": "refresh token required"}, status=400)
+        refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH_NAME)
+        if not refresh_token:
+            response = Response({"detail": "refresh token required"}, status=401)
+            return clear_auth_cookies(response)
+
         try:
-            token = RefreshToken(refresh)
-            token.blacklist()  # сработает, если rest_framework_simplejwt.token_blacklist в INSTALLED_APPS
-        except Exception:
-            pass
-        return Response({"detail": "ok"})
+            refresh = RefreshToken(refresh_token)
+            access_token = str(refresh.access_token)
+        except TokenError:
+            response = Response({"detail": "token is invalid or expired"}, status=401)
+            return clear_auth_cookies(response)
+
+        response = Response({"detail": "ok"})
+        return set_auth_cookies(
+            response,
+            request,
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+
+
+class LogoutAPI(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get(settings.AUTH_COOKIE_REFRESH_NAME)
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                pass
+
+        response = Response({"detail": "ok"})
+        return clear_auth_cookies(response)

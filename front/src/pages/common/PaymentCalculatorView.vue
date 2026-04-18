@@ -1,4 +1,3 @@
-<!-- src/pages/common/PaymentCalculatorView.vue -->
 <template>
   <div class="payment-page">
     <div class="payment-content">
@@ -80,10 +79,12 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 import Footer from '../../components/Footer.vue'
 import { createYookassaPayment, getPublicPaymentConfig } from '../../api/payments'
 
 const router = useRouter()
+const auth = useAuthStore()
 const lessonPrice = ref(1000)
 const maxLessonsPerPayment = ref(20)
 const selectedOption = ref(1)
@@ -162,8 +163,11 @@ async function handlePay() {
     return
   }
 
-  const accessToken = localStorage.getItem('access')
-  if (!accessToken) {
+  if (!auth.initialized) {
+    await auth.initialize()
+  }
+
+  if (!auth.isAuthenticated) {
     router.push({ name: 'login', query: { redirect: '/payment' } })
     return
   }
@@ -205,7 +209,6 @@ onMounted(() => {
   flex-direction: column;
 }
 
-/* Контент */
 .payment-content {
   flex: 1;
   max-width: 880px;
@@ -405,14 +408,12 @@ onMounted(() => {
   font-size: 0.9rem;
 }
 
-/* Раскрываемые блоки */
 .expandable-blocks {
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-/* Карточка с реквизитами */
 .payment-info {
   display: flex;
   flex-direction: column;
@@ -444,7 +445,6 @@ onMounted(() => {
   font-weight: 700;
 }
 
-/* Карточка с контактами */
 .contact-description {
   font-size: 0.95rem;
   color: rgba(255, 255, 255, 0.8);
@@ -492,7 +492,6 @@ onMounted(() => {
   text-decoration: underline;
 }
 
-/* Карточка с инструкцией */
 .steps {
   display: flex;
   flex-direction: column;
@@ -531,7 +530,6 @@ onMounted(() => {
   color: #FFD700;
 }
 
-/* Анимация раскрытия */
 .expand-enter-active,
 .expand-leave-active {
   transition: opacity 0.3s ease, transform 0.3s ease;
@@ -543,7 +541,6 @@ onMounted(() => {
   transform: translateY(-10px);
 }
 
-/* Адаптивность */
 @media (max-width: 768px) {
   .payment-content {
     padding: 20px 16px;
@@ -591,10 +588,10 @@ onMounted(() => {
     font-size: 1.5rem;
   }
 
-
   .preset-options {
     grid-template-columns: 1fr;
   }
+
   .card {
     padding: 16px;
   }

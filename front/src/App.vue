@@ -1,13 +1,14 @@
-<!-- src/App.vue -->
 <template>
   <div class="app">
     <TopNavigationBar />
     <router-view />
+    <CookieBanner />
   </div>
 </template>
 
 <script setup>
 import TopNavigationBar from './components/TopNavigationBar.vue'
+import CookieBanner from './components/CookieBanner.vue'
 </script>
 
 <style scoped>
