@@ -31,6 +31,10 @@
                   <span class="item-icon">👥</span>
                   <span>Управление пользователями</span>
                 </router-link>
+                <router-link :to="{ name: 'admin-balance' }" class="dropdown-item" @click="closeAdminMenu">
+                  <span class="item-icon">💰</span>
+                  <span>Управление балансами</span>
+                </router-link>
                 <router-link :to="{ name: 'admin-schedule' }" class="dropdown-item" @click="closeAdminMenu">
                   <span class="item-icon">📅</span>
                   <span>Расписание</span>

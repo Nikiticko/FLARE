@@ -91,6 +91,12 @@ const routes = [
     meta: { requiresAuth: true, roles: ['admin'] },
   },
   {
+    path: '/admin/balance/:studentId?',
+    name: 'admin-balance',
+    component: ManagerBalanceView,
+    meta: { requiresAuth: true, roles: ['admin'] },
+  },
+  {
     path: '/manager/schedule',
     name: 'manager-schedule',
     component: ManagerScheduleView,
@@ -190,6 +196,7 @@ const pageTitles = {
   'admin-schedule': 'Расписание — Админ — F.L.A.R.E.',
   'admin-logs': 'Логи — Админ — F.L.A.R.E.',
   'admin-courses': 'Курсы — Админ — F.L.A.R.E.',
+  'admin-balance': 'Балансы — Админ — F.L.A.R.E.',
   'manager-schedule': 'Расписание — Менеджер — F.L.A.R.E.',
   'manager-balance': 'Балансы — Менеджер — F.L.A.R.E.',
   'manager-requests': 'Запросы — Менеджер — F.L.A.R.E.',
