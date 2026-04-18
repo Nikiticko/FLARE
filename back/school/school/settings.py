@@ -234,6 +234,28 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOG_DIR = BASE_DIR / 'logs'
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def _build_file_handler(filename, level, backup_count):
+    if DEBUG and os.name == 'nt':
+        return {
+            'level': level,
+            'class': 'logging.FileHandler',
+            'filename': str(LOG_DIR / filename),
+            'encoding': 'utf-8',
+            'formatter': 'backend',
+        }
+
+    return {
+        'level': level,
+        'class': 'logging.handlers.TimedRotatingFileHandler',
+        'filename': str(LOG_DIR / filename),
+        'when': 'midnight',
+        'interval': 1,
+        'backupCount': backup_count,
+        'encoding': 'utf-8',
+        'formatter': 'backend',
+    }
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -244,26 +266,8 @@ LOGGING = {
         },
     },
     'handlers': {
-        'backend_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': str(LOG_DIR / 'backend.log'),
-            'when': 'midnight',
-            'interval': 1,
-            'backupCount': 3,
-            'encoding': 'utf-8',
-            'formatter': 'backend',
-        },
-        'backend_error_file': {
-            'level': 'ERROR',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': str(LOG_DIR / 'backend_errors.log'),
-            'when': 'midnight',
-            'interval': 1,
-            'backupCount': 14,
-            'encoding': 'utf-8',
-            'formatter': 'backend',
-        },
+        'backend_file': _build_file_handler('backend.log', 'INFO', 3),
+        'backend_error_file': _build_file_handler('backend_errors.log', 'ERROR', 14),
     },
     'root': {
         'handlers': ['backend_file', 'backend_error_file'],
