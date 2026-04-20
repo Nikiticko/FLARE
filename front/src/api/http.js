@@ -1,9 +1,23 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://127.0.0.1:8000/api' : '/api')
+const resolveDefaultApiBaseUrl = () => {
+  if (!import.meta.env.DEV) {
+    return '/api'
+  }
+
+  if (typeof window === 'undefined') {
+    return 'http://127.0.0.1:8000/api'
+  }
+
+  const { protocol, hostname } = window.location
+  return `${protocol}//${hostname}:8000/api`
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || resolveDefaultApiBaseUrl()
 
 const getRefreshURL = () => `${API_BASE_URL}/token/refresh/`
 const getCsrfURL = () => `${API_BASE_URL}/auth/csrf/`
+const AUTH_SESSION_COOKIE = 'auth_session'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -19,6 +33,8 @@ const readCookie = (name) => {
   const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`))
   return match ? decodeURIComponent(match[1]) : null
 }
+
+export const hasAuthSessionMarker = () => readCookie(AUTH_SESSION_COOKIE) === '1'
 
 let csrfRequest = null
 
@@ -73,6 +89,7 @@ apiClient.interceptors.response.use(
     const shouldTryRefresh =
       error.response?.status === 401 &&
       originalRequest &&
+      hasAuthSessionMarker() &&
       !originalRequest._retry &&
       !requestUrl.includes('/auth/login/') &&
       !requestUrl.includes('/auth/register/') &&

@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.conf import settings
 from pathlib import Path
+import json
 import os
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
@@ -33,6 +34,29 @@ User = get_user_model()
 
 def _parse_backend_log_line(line):
     raw = (line or '').rstrip('\n')
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            return {
+                'timestamp': parsed.get('timestamp'),
+                'level': parsed.get('level', 'UNKNOWN'),
+                'logger': parsed.get('logger'),
+                'message': parsed.get('message') or parsed.get('event') or raw,
+                'event': parsed.get('event'),
+                'request_id': parsed.get('request_id'),
+                'method': parsed.get('method'),
+                'path': parsed.get('path'),
+                'status_code': parsed.get('status_code'),
+                'duration_ms': parsed.get('duration_ms'),
+                'ip': parsed.get('ip'),
+                'user_email': parsed.get('user_email'),
+                'user_role': parsed.get('user_role'),
+                'raw': raw,
+                'details': parsed,
+            }
+    except json.JSONDecodeError:
+        pass
+
     parts = raw.split('|', 3)
     if len(parts) == 4:
         return {
@@ -40,7 +64,10 @@ def _parse_backend_log_line(line):
             'level': parts[1],
             'logger': parts[2],
             'message': parts[3],
+            'event': None,
+            'request_id': None,
             'raw': raw,
+            'details': None,
         }
 
     return {
@@ -48,7 +75,10 @@ def _parse_backend_log_line(line):
         'level': 'UNKNOWN',
         'logger': None,
         'message': raw,
+        'event': None,
+        'request_id': None,
         'raw': raw,
+        'details': None,
     }
 
 

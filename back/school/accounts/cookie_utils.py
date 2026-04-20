@@ -34,6 +34,15 @@ def set_auth_cookies(response, request, *, access_token, refresh_token):
         samesite=settings.AUTH_COOKIE_SAMESITE,
         path=settings.AUTH_COOKIE_PATH,
     )
+    response.set_cookie(
+        settings.AUTH_COOKIE_SESSION_NAME,
+        "1",
+        max_age=refresh_max_age,
+        httponly=False,
+        secure=settings.AUTH_COOKIE_SECURE,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+        path=settings.AUTH_COOKIE_PATH,
+    )
 
     get_token(request)
     return response
@@ -47,6 +56,11 @@ def clear_auth_cookies(response):
     )
     response.delete_cookie(
         settings.AUTH_COOKIE_REFRESH_NAME,
+        path=settings.AUTH_COOKIE_PATH,
+        samesite=settings.AUTH_COOKIE_SAMESITE,
+    )
+    response.delete_cookie(
+        settings.AUTH_COOKIE_SESSION_NAME,
         path=settings.AUTH_COOKIE_PATH,
         samesite=settings.AUTH_COOKIE_SAMESITE,
     )

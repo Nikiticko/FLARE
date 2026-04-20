@@ -63,6 +63,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'school.middleware.RequestLogMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -132,6 +133,7 @@ REST_FRAMEWORK = {
 
 AUTH_COOKIE_ACCESS_NAME = os.getenv("AUTH_COOKIE_ACCESS_NAME", "access_token")
 AUTH_COOKIE_REFRESH_NAME = os.getenv("AUTH_COOKIE_REFRESH_NAME", "refresh_token")
+AUTH_COOKIE_SESSION_NAME = os.getenv("AUTH_COOKIE_SESSION_NAME", "auth_session")
 AUTH_COOKIE_PATH = os.getenv("AUTH_COOKIE_PATH", "/")
 AUTH_COOKIE_SAMESITE = os.getenv("AUTH_COOKIE_SAMESITE", "Lax")
 AUTH_COOKIE_SECURE = os.getenv("AUTH_COOKIE_SECURE", "False") == "True"
@@ -267,7 +269,8 @@ def _build_file_handler(filename, level, backup_count):
             'class': 'logging.FileHandler',
             'filename': str(LOG_DIR / filename),
             'encoding': 'utf-8',
-            'formatter': 'backend',
+            'formatter': 'backend_json',
+            'filters': ['request_context'],
         }
 
     return {
@@ -278,16 +281,21 @@ def _build_file_handler(filename, level, backup_count):
         'interval': 1,
         'backupCount': backup_count,
         'encoding': 'utf-8',
-        'formatter': 'backend',
+        'formatter': 'backend_json',
+        'filters': ['request_context'],
     }
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'request_context': {
+            '()': 'school.logging_utils.RequestContextFilter',
+        },
+    },
     'formatters': {
-        'backend': {
-            'format': '%(asctime)s|%(levelname)s|%(name)s|%(message)s',
-            'datefmt': '%Y-%m-%d %H:%M:%S',
+        'backend_json': {
+            '()': 'school.logging_utils.StructuredJSONFormatter',
         },
     },
     'handlers': {
@@ -305,6 +313,26 @@ LOGGING = {
             'propagate': False,
         },
         'django.request': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'school.request': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'school.auth': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'school.security': {
+            'handlers': ['backend_file', 'backend_error_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'school.error': {
             'handlers': ['backend_file', 'backend_error_file'],
             'level': 'INFO',
             'propagate': False,

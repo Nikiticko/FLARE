@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { loginApi, getMeApi, registerApi, logoutApi, getCsrfApi } from '../api/auth'
+import { hasAuthSessionMarker } from '../api/http'
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -33,7 +34,9 @@ export const useAuthStore = defineStore('auth', {
         this.loading = true
         try {
           await getCsrfApi()
-          await this.fetchMe()
+          if (hasAuthSessionMarker()) {
+            await this.fetchMe()
+          }
         } catch (err) {
           if (err?.response?.status !== 401) {
             console.error('Auth initialize error:', err)

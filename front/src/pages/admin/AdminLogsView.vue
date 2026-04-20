@@ -204,7 +204,21 @@
             <span class="backend-ts">{{ entry.timestamp || '—' }}</span>
             <span class="backend-level" :class="levelClass(entry.level)">{{ entry.level || 'UNKNOWN' }}</span>
             <span class="backend-logger">{{ entry.logger || 'system' }}</span>
-            <span class="backend-message">{{ entry.message }}</span>
+            <div class="backend-message-block">
+              <div class="backend-message-line">
+                <span v-if="entry.event" class="backend-event">{{ entry.event }}</span>
+                <span v-if="entry.request_id" class="backend-request-id">req {{ shortRequestId(entry.request_id) }}</span>
+                <span v-if="entry.status_code" class="backend-status">HTTP {{ entry.status_code }}</span>
+                <span v-if="entry.duration_ms" class="backend-duration">{{ entry.duration_ms }} ms</span>
+              </div>
+              <span class="backend-message">{{ entry.message }}</span>
+              <div v-if="entry.user_email || entry.path || entry.ip" class="backend-meta-line">
+                <span v-if="entry.user_email">{{ entry.user_email }}</span>
+                <span v-if="entry.user_role">{{ entry.user_role }}</span>
+                <span v-if="entry.path">{{ entry.path }}</span>
+                <span v-if="entry.ip">{{ entry.ip }}</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -374,6 +388,11 @@ const levelClass = (level) => {
   if (upper === 'INFO') return 'is-info'
   if (upper === 'DEBUG') return 'is-debug'
   return ''
+}
+
+const shortRequestId = (value) => {
+  if (!value) return ''
+  return String(value).slice(0, 8)
 }
 
 const clearBackendLogs = async () => {
@@ -745,6 +764,46 @@ watch(
 .backend-message {
   color: rgba(255, 255, 255, 0.95);
   word-break: break-word;
+}
+
+.backend-message-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.backend-message-line,
+.backend-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.backend-event,
+.backend-request-id,
+.backend-status,
+.backend-duration {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  border: 1px solid rgba(255, 215, 0, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.backend-event {
+  border-color: rgba(255, 215, 0, 0.35);
+  color: #ffd866;
+}
+
+.backend-meta-line {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.74rem;
 }
 
 .backend-level.is-error {
