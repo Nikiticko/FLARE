@@ -91,6 +91,9 @@
             </div>
 
             <div v-if="activeTab === 'backend'" class="filter-group filter-actions-right">
+              <button class="btn secondary" @click="loadBackendLogs" :disabled="backendLoading">
+                {{ backendLoading ? 'Обновляем...' : 'Обновить backend-логи' }}
+              </button>
               <button class="btn danger" @click="clearBackendLogs" :disabled="backendLoading">
                 🧹 Очистить логи
               </button>
@@ -133,6 +136,9 @@
         <div class="card-header">
           <div class="card-icon">📜</div>
           <h2 class="card-title">История действий</h2>
+          <button class="btn secondary card-action-btn" @click="loadLogs" :disabled="loading">
+            {{ loading ? 'Обновляем...' : 'Обновить историю' }}
+          </button>
         </div>
 
         <div v-if="error" class="error-message">
@@ -256,7 +262,6 @@ const backendLimit = ref(500)
 const backendLevelOptions = ['ERROR', 'WARNING', 'INFO', 'DEBUG', 'CRITICAL']
 const backendSelectedLevels = ref(['ERROR', 'WARNING'])
 
-let autoRefreshTimer = null
 let searchDebounceTimer = null
 
 // загрузка логов с бэка
@@ -356,31 +361,6 @@ const switchTab = (tab) => {
   activeTab.value = tab
 }
 
-const refreshCurrentTab = () => {
-  if (activeTab.value === 'audit') {
-    loadLogs()
-    return
-  }
-  loadBackendLogs()
-}
-
-const runAutoRefresh = () => {
-  if (document.visibilityState === 'hidden') return
-  if (loading.value || backendLoading.value) return
-  refreshCurrentTab()
-}
-
-const startAutoRefresh = () => {
-  if (autoRefreshTimer) clearInterval(autoRefreshTimer)
-  autoRefreshTimer = setInterval(runAutoRefresh, 15000)
-}
-
-const stopAutoRefresh = () => {
-  if (!autoRefreshTimer) return
-  clearInterval(autoRefreshTimer)
-  autoRefreshTimer = null
-}
-
 const levelClass = (level) => {
   const upper = (level || '').toUpperCase()
   if (upper === 'ERROR' || upper === 'CRITICAL') return 'is-error'
@@ -422,12 +402,10 @@ onMounted(() => {
     router.push({ name: 'login' })
   } else {
     loadLogs()
-    startAutoRefresh()
   }
 })
 
 onUnmounted(() => {
-  stopAutoRefresh()
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer)
     searchDebounceTimer = null
@@ -452,7 +430,11 @@ watch(ordering, () => {
 watch(searchQuery, () => {
   if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
   searchDebounceTimer = setTimeout(() => {
-    refreshCurrentTab()
+    if (activeTab.value === 'audit') {
+      loadLogs()
+      return
+    }
+    loadBackendLogs()
   }, 450)
 })
 
@@ -654,6 +636,10 @@ watch(
   margin: 0;
   color: #FFFFFF;
   letter-spacing: -0.5px;
+}
+
+.card-action-btn {
+  margin-left: auto;
 }
 
 .filters-section {
