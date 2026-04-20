@@ -70,17 +70,17 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
     const requestUrl = String(originalRequest?.url || '')
-
-    if (
+    const shouldTryRefresh =
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
       !requestUrl.includes('/auth/login/') &&
       !requestUrl.includes('/auth/register/') &&
       !requestUrl.includes('/auth/admin-login/') &&
-      !requestUrl.includes('/auth/me/') &&
+      !requestUrl.includes('/auth/logout/') &&
       !requestUrl.includes('/token/refresh/')
-    ) {
+
+    if (shouldTryRefresh) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
