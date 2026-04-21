@@ -273,9 +273,8 @@ class AdminPaymentListAPI(generics.ListAPIView):
 
 class AdminPaymentConfirmAPI(APIView):
     """
-    Подтверждение оплаты и начисление занятий на баланс.
+    Legacy endpoint intentionally disabled.
     POST /api/admin/payments/{id}/confirm/
-    body: {"lessons_to_add": 4}
     """
     permission_classes = [IsAuthenticated, IsAdminRole]
 
@@ -289,39 +288,6 @@ class AdminPaymentConfirmAPI(APIView):
             },
             status=status.HTTP_409_CONFLICT,
         )
-        try:
-            payment = Payment.objects.select_related("student").get(pk=pk)
-        except Payment.DoesNotExist:
-            return Response({"detail": "payment not found"}, status=404)
-
-        if payment.confirmed:
-            return Response({"detail": "already confirmed"}, status=400)
-
-        lessons_to_add = int(request.data.get("lessons_to_add", 0))
-        if lessons_to_add <= 0:
-            return Response({"detail": "lessons_to_add must be > 0"}, status=400)
-
-        with transaction.atomic():
-            lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                student=payment.student
-            )
-            lb.lessons_available += lessons_to_add
-            lb.save()
-
-            payment.confirmed = True
-            payment.save()
-
-            AuditLog.objects.create(
-                actor=request.user,
-                action="CONFIRM_PAYMENT",
-                meta={
-                    "payment_id": payment.id,
-                    "student": payment.student_id,
-                    "lessons_added": lessons_to_add,
-                },
-            )
-
-        return Response({"detail": "ok"})
 
 
 class AdminBalanceGetAPI(generics.RetrieveAPIView):

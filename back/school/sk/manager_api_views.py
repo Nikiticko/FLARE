@@ -359,9 +359,8 @@ class ManagerPaymentsListCreateAPI(generics.ListAPIView):
 
 class ManagerPaymentConfirmAPI(APIView):
     """
-    Подтверждение оплаты менеджером + начисление занятий:
+    Legacy endpoint intentionally disabled.
     POST /api/manager/payments/{id}/confirm/
-    body: {"lessons_to_add": 4}
     """
     permission_classes = [IsManagerOrAdmin]
 
@@ -375,50 +374,6 @@ class ManagerPaymentConfirmAPI(APIView):
             },
             status=status.HTTP_409_CONFLICT,
         )
-        try:
-            payment = Payment.objects.select_related("student").get(pk=pk)
-        except Payment.DoesNotExist:
-            return Response({"detail": "payment not found"}, status=404)
-
-        if payment.confirmed:
-            return Response({"detail": "already confirmed"}, status=400)
-
-        lessons_to_add = int(request.data.get("lessons_to_add", 0))
-        if lessons_to_add <= 0:
-            return Response({"detail": "lessons_to_add must be > 0"}, status=400)
-
-        with transaction.atomic():
-            lb, _ = LessonBalance.objects.select_for_update().get_or_create(
-                student=payment.student
-            )
-            lb.lessons_available += lessons_to_add
-            lb.save()
-
-            # Автоматически меняем роль с APPLICANT на STUDENT при первом начислении баланса
-            role_changed = False
-            old_role = payment.student.role
-            if payment.student.role == User.Roles.APPLICANT:
-                payment.student.role = User.Roles.STUDENT
-                payment.student.save(update_fields=['role'])
-                role_changed = True
-
-            payment.confirmed = True
-            payment.save()
-
-            AuditLog.objects.create(
-                actor=request.user,
-                action="MANAGER_CONFIRM_PAYMENT",
-                meta={
-                    "payment_id": payment.id,
-                    "student": payment.student_id,
-                    "lessons_added": lessons_to_add,
-                    "old_role": old_role,
-                    "new_role": payment.student.role,
-                    "role_changed": role_changed,
-                },
-            )
-
-        return Response({"detail": "ok"})
 
 
 class ManagerStudentBalanceAPI(generics.RetrieveAPIView):
