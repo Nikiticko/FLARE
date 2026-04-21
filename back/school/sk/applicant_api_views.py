@@ -1,25 +1,24 @@
-from django.db import transaction
 from rest_framework import generics
-from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.views import APIView
 
 from accounts.permissions import IsApplicantOrAdmin
-from .models import Course, LessonBalance, Payment, ClientRequest
+from .models import ClientRequest, Course, LessonBalance, Payment
 from .applicant_serializers import (
-    ApplicantCourseSerializer,
     ApplicantBalanceSerializer,
-    ApplicantPaymentCreateSerializer,
-    ApplicantPaymentSerializer,
     ApplicantClientRequestCreateSerializer,
+    ApplicantCourseSerializer,
+    ApplicantPaymentSerializer,
 )
 
 
 class PublicCoursesListAPI(generics.ListAPIView):
     """
-    Публичный список курсов (для главной страницы).
+    Public list of courses for the landing page.
     GET /api/applicant/courses/public/
     """
+
     permission_classes = [AllowAny]
     serializer_class = ApplicantCourseSerializer
 
@@ -29,9 +28,10 @@ class PublicCoursesListAPI(generics.ListAPIView):
 
 class ApplicantCoursesListAPI(generics.ListAPIView):
     """
-    Просмотр возможных курсов (только активные).
+    List of available courses for the applicant.
     GET /api/applicant/courses/
     """
+
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
     serializer_class = ApplicantCourseSerializer
 
@@ -41,9 +41,10 @@ class ApplicantCoursesListAPI(generics.ListAPIView):
 
 class ApplicantBalanceAPI(APIView):
     """
-    Информация о балансе абитуриента.
+    Applicant lesson balance.
     GET /api/applicant/balance/
     """
+
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
 
     def get(self, request):
@@ -54,9 +55,10 @@ class ApplicantBalanceAPI(APIView):
 
 class ApplicantPaymentsListAPI(generics.ListAPIView):
     """
-    История оплат абитуриента.
+    Applicant payment history.
     GET /api/applicant/payments/
     """
+
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
     serializer_class = ApplicantPaymentSerializer
 
@@ -66,55 +68,37 @@ class ApplicantPaymentsListAPI(generics.ListAPIView):
 
 class ApplicantCreatePaymentAPI(APIView):
     """
-    Создание записи оплаты абитуриентом.
-    В реальной жизни здесь была бы интеграция с платёжкой,
-    но по ТЗ достаточно зафиксировать факт оплаты:
-      - создаём Payment с confirmed=False
-      - менеджер/админ потом подтверждает и начисляет занятия
-    POST /api/applicant/payments/create/
-    Body: {"course_id": 1, "amount": "5000.00", "package_name": "8 занятий"}
+    Legacy endpoint intentionally disabled.
+    Use /api/payments/create/ for automatic YooKassa payments.
     """
+
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
 
-    @transaction.atomic
     def post(self, request):
         return Response(
             {"detail": "legacy manual payment creation is disabled; use /api/payments/create/"},
             status=410,
         )
-        ser = ApplicantPaymentCreateSerializer(data=request.data)
-        ser.is_valid(raise_exception=True)
-        course_id = ser.validated_data["course_id"]
-        amount = ser.validated_data["amount"]
-        package_name = ser.validated_data.get("package_name") or ""
 
-        payment = Payment.objects.create(
-            student=request.user,
-            amount=amount,
-            package_name=package_name or f"Оплата курса #{course_id}",
-            confirmed=False,  # подтверждает менеджер/админ
-        )
-
-        return Response(ApplicantPaymentSerializer(payment).data, status=201)
-
-
-# ===== ОБРАЩЕНИЯ К МЕНЕДЖЕРУ =====
 
 class ApplicantCreateClientRequestAPI(APIView):
     """
-    Создание обращения к менеджеру абитуриентом.
+    Create a client request for the manager.
     POST /api/applicant/requests/create/
-    Body: {"comment": "Текст комментария (необязательно)"}
     """
+
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
 
     def post(self, request):
-        ser = ApplicantClientRequestCreateSerializer(data=request.data, context={'request': request})
+        ser = ApplicantClientRequestCreateSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
         request_obj = ser.save()
-        return Response({
-            "id": request_obj.id,
-            "comment": request_obj.comment,
-            "status": request_obj.status,
-            "created_at": request_obj.created_at,
-        }, status=201)
+        return Response(
+            {
+                "id": request_obj.id,
+                "comment": request_obj.comment,
+                "status": request_obj.status,
+                "created_at": request_obj.created_at,
+            },
+            status=201,
+        )
