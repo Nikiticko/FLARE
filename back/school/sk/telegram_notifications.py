@@ -15,6 +15,14 @@ def _telegram_notifications_enabled() -> bool:
     return bool(bot_token and chat_id)
 
 
+def _mask_token(token: str) -> str:
+    if not token:
+        return "-"
+    if len(token) <= 10:
+        return "***"
+    return f"{token[:6]}...{token[-4:]}"
+
+
 def _format_amount(amount: Decimal) -> str:
     return f"{amount:.2f}".replace(".", ",")
 
@@ -40,6 +48,12 @@ def build_successful_payment_message(payment) -> str:
 
 def send_successful_payment_notification(payment) -> bool:
     if not _telegram_notifications_enabled():
+        logger.info(
+            "Telegram notification skipped: missing config payment_id=%s bot_configured=%s chat_configured=%s",
+            payment.id,
+            bool(getattr(settings, "TELEGRAM_BOT_TOKEN", "").strip()),
+            bool(getattr(settings, "TELEGRAM_NOTIFICATIONS_CHAT_ID", "").strip()),
+        )
         return False
 
     bot_token = settings.TELEGRAM_BOT_TOKEN.strip()
@@ -67,24 +81,44 @@ def send_successful_payment_notification(payment) -> bool:
                     payment.id,
                 )
                 return False
+    except error.HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        try:
+            parsed_body = json.loads(raw_body) if raw_body else {"detail": "empty error response"}
+        except json.JSONDecodeError:
+            parsed_body = {"detail": raw_body or "invalid telegram error response"}
+
+        logger.warning(
+            "Telegram notification HTTP error: payment_id=%s status=%s chat_id=%s token=%s body=%s",
+            payment.id,
+            exc.code,
+            chat_id,
+            _mask_token(bot_token),
+            parsed_body,
+        )
+        return False
     except error.URLError as exc:
         logger.warning(
-            "Telegram notification request error: payment_id=%s error=%s",
+            "Telegram notification request error: payment_id=%s chat_id=%s token=%s error=%s",
             payment.id,
+            chat_id,
+            _mask_token(bot_token),
             exc,
         )
         return False
     except json.JSONDecodeError as exc:
         logger.warning(
-            "Telegram notification decode error: payment_id=%s error=%s",
+            "Telegram notification decode error: payment_id=%s chat_id=%s error=%s",
             payment.id,
+            chat_id,
             exc,
         )
         return False
 
     logger.info(
-        "Telegram notification sent for successful payment: payment_id=%s student_id=%s",
+        "Telegram notification sent for successful payment: payment_id=%s student_id=%s chat_id=%s",
         payment.id,
         payment.student_id,
+        chat_id,
     )
     return True
