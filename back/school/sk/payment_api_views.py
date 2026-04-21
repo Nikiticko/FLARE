@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from urllib import error, request as urllib_request
 
@@ -10,6 +11,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -183,6 +185,46 @@ def sync_pending_yookassa_payments_for_user(user, limit: int = 5):
             synced_count += 1
 
     return synced_count
+
+
+def sync_recent_pending_yookassa_payments(limit_per_user: int = 5, max_age_hours: int = 48):
+    """
+    Server-side reconciliation for pending YooKassa payments.
+    Intended for periodic execution from cron/task scheduler.
+    """
+    cutoff = timezone.now() - timedelta(hours=max(1, max_age_hours))
+    pending_payments = (
+        Payment.objects
+        .select_related("student")
+        .filter(
+            confirmed=False,
+            yookassa_payment_id__gt="",
+            paid_at__gte=cutoff,
+        )
+        .exclude(yookassa_status__in=["succeeded", "canceled"])
+        .order_by("student_id", "-paid_at")
+    )
+
+    checked = 0
+    confirmed = 0
+    per_user_counts = {}
+
+    for payment in pending_payments:
+        current_count = per_user_counts.get(payment.student_id, 0)
+        if current_count >= max(1, limit_per_user):
+            continue
+
+        per_user_counts[payment.student_id] = current_count + 1
+        refreshed_payment = _sync_payment_status_from_provider(payment)
+        checked += 1
+        if refreshed_payment.confirmed:
+            confirmed += 1
+
+    return {
+        "checked": checked,
+        "confirmed": confirmed,
+        "users": len(per_user_counts),
+    }
 
 
 class YooKassaCreatePaymentAPI(APIView):

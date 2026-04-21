@@ -15,7 +15,7 @@ from .lesson_balance_service import (
     reserve_lesson_slot,
 )
 from .models import AuditLog, Lesson, LessonBalance, Payment, PaymentSettings
-from .payment_api_views import _finalize_successful_payment
+from .payment_api_views import _finalize_successful_payment, sync_recent_pending_yookassa_payments
 
 
 User = get_user_model()
@@ -226,6 +226,40 @@ class PaymentBusinessLogicTests(BaseBusinessLogicTestCase):
         self.assertEqual(balance.lessons_available, 2)
         self.assertEqual(self.applicant.role, User.Roles.STUDENT)
         self.assertTrue(AuditLog.objects.filter(action="MANAGER_UPDATE_BALANCE").exists())
+
+    @patch("sk.payment_api_views._yookassa_request")
+    def test_sync_recent_pending_yookassa_payments_confirms_successful_entries(self, mock_request):
+        second_user = self.create_user(
+            "another-applicant@example.com",
+            User.Roles.APPLICANT,
+            phone="+79990000000",
+        )
+        first_payment = Payment.objects.create(
+            student=self.applicant,
+            amount=Decimal("1200.00"),
+            lessons_count=1,
+            confirmed=False,
+            yookassa_payment_id="yk-batch-1",
+            yookassa_status="pending",
+        )
+        second_payment = Payment.objects.create(
+            student=second_user,
+            amount=Decimal("2400.00"),
+            lessons_count=2,
+            confirmed=False,
+            yookassa_payment_id="yk-batch-2",
+            yookassa_status="pending",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+
+        stats = sync_recent_pending_yookassa_payments(limit_per_user=5, max_age_hours=48)
+
+        self.assertEqual(stats["checked"], 2)
+        self.assertEqual(stats["confirmed"], 2)
+        first_payment.refresh_from_db()
+        second_payment.refresh_from_db()
+        self.assertTrue(first_payment.confirmed)
+        self.assertTrue(second_payment.confirmed)
 
 
 @override_settings(
