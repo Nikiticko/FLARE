@@ -344,7 +344,7 @@ class ManagerLessonDebitAPI(APIView):
 # ======= ПЛАТЕЖИ / БАЛАНС =======
 
 
-class ManagerPaymentsListCreateAPI(generics.ListCreateAPIView):
+class ManagerPaymentsListCreateAPI(generics.ListAPIView):
     """
     GET: список платежей
     POST: создать оплату (без подтверждения)
@@ -366,6 +366,15 @@ class ManagerPaymentConfirmAPI(APIView):
     permission_classes = [IsManagerOrAdmin]
 
     def post(self, request, pk):
+        return Response(
+            {
+                "detail": (
+                    "manual payment confirmation is disabled; "
+                    "use /api/manager/students/<id>/balance/update/ for manual balance changes"
+                )
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
         try:
             payment = Payment.objects.select_related("student").get(pk=pk)
         except Payment.DoesNotExist:

@@ -78,6 +78,10 @@ class ApplicantCreatePaymentAPI(APIView):
 
     @transaction.atomic
     def post(self, request):
+        return Response(
+            {"detail": "legacy manual payment creation is disabled; use /api/payments/create/"},
+            status=410,
+        )
         ser = ApplicantPaymentCreateSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         course_id = ser.validated_data["course_id"]

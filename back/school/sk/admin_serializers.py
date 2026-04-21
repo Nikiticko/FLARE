@@ -67,6 +67,16 @@ class PaymentSerializer(serializers.ModelSerializer):
             "paid_at",
             "confirmed",
         )
+        read_only_fields = (
+            "id",
+            "student",
+            "student_email",
+            "amount",
+            "package_name",
+            "lessons_count",
+            "paid_at",
+            "confirmed",
+        )
 
 
 class LessonBalanceSerializer(serializers.ModelSerializer):

@@ -258,7 +258,7 @@ class AdminResetPasswordAPI(APIView):
 # ======= PAYMENTS / BALANCE =======
 
 
-class AdminPaymentListAPI(generics.ListCreateAPIView):
+class AdminPaymentListAPI(generics.ListAPIView):
     """
     GET: список платежей (фильтры: confirmed, student)
     POST: создать запись оплаты (обычно создаёт менеджер, но админ может всё)
@@ -280,6 +280,15 @@ class AdminPaymentConfirmAPI(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
+        return Response(
+            {
+                "detail": (
+                    "manual payment confirmation is disabled; "
+                    "use /api/manager/students/<id>/balance/update/ for manual balance changes"
+                )
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
         try:
             payment = Payment.objects.select_related("student").get(pk=pk)
         except Payment.DoesNotExist:

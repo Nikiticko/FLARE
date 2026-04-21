@@ -277,6 +277,7 @@ class ManagerPaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = ("id", "student", "student_email", "amount", "package_name", "lessons_count", "paid_at", "confirmed")
+        read_only_fields = ("id", "student", "student_email", "amount", "package_name", "lessons_count", "paid_at", "confirmed")
 
 
 # ===== ОБРАЩЕНИЯ КЛИЕНТОВ =====

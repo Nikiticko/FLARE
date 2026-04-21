@@ -188,7 +188,7 @@ class PaymentBusinessLogicTests(BaseBusinessLogicTestCase):
             1,
         )
 
-    def test_manager_confirms_payment_and_promotes_applicant(self):
+    def test_manager_payment_confirmation_is_disabled(self):
         payment = Payment.objects.create(
             student=self.applicant,
             amount=Decimal("1000.00"),
@@ -202,14 +202,10 @@ class PaymentBusinessLogicTests(BaseBusinessLogicTestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
         payment.refresh_from_db()
-        self.applicant.refresh_from_db()
-        balance = LessonBalance.objects.get(student=self.applicant)
-        self.assertTrue(payment.confirmed)
-        self.assertEqual(balance.lessons_available, 4)
-        self.assertEqual(self.applicant.role, User.Roles.STUDENT)
-        self.assertTrue(AuditLog.objects.filter(action="MANAGER_CONFIRM_PAYMENT").exists())
+        self.assertFalse(payment.confirmed)
+        self.assertFalse(AuditLog.objects.filter(action="MANAGER_CONFIRM_PAYMENT").exists())
 
     def test_manager_balance_delta_promotes_applicant_when_positive(self):
         self.client.force_authenticate(self.manager)
@@ -277,6 +273,11 @@ class PaymentApiTests(BaseBusinessLogicTestCase):
             phone="+79991234567",
         )
         self.manager = self.create_user("manager-pay@example.com", User.Roles.MANAGER)
+        self.applicant = self.create_user(
+            "applicant-pay@example.com",
+            User.Roles.APPLICANT,
+            phone="+79991112233",
+        )
 
     @patch("sk.payment_api_views._yookassa_request")
     def test_create_yookassa_payment_persists_pending_payment(self, mock_request):
@@ -310,6 +311,49 @@ class PaymentApiTests(BaseBusinessLogicTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Payment.objects.filter(student=user).count(), 0)
+
+    def test_legacy_applicant_payment_creation_is_disabled(self):
+        self.client.force_authenticate(self.applicant)
+
+        response = self.client.post(
+            "/api/applicant/payments/create/",
+            {"course_id": 1, "amount": "5000.00", "package_name": "legacy"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_410_GONE)
+        self.assertEqual(Payment.objects.filter(student=self.applicant).count(), 0)
+
+    def test_manager_payment_create_endpoint_is_read_only(self):
+        self.client.force_authenticate(self.manager)
+
+        response = self.client.post(
+            "/api/manager/payments/",
+            {"student": self.student.id, "amount": "1500.00", "lessons_count": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_admin_payment_confirm_endpoint_is_disabled(self):
+        admin = self.create_user("admin-pay@example.com", User.Roles.ADMIN)
+        payment = Payment.objects.create(
+            student=self.student,
+            amount=Decimal("1500.00"),
+            lessons_count=1,
+            confirmed=False,
+        )
+        self.client.force_authenticate(admin)
+
+        response = self.client.post(
+            f"/api/admin/payments/{payment.id}/confirm/",
+            {"lessons_to_add": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_409_CONFLICT)
+        payment.refresh_from_db()
+        self.assertFalse(payment.confirmed)
 
     @patch("sk.payment_api_views._yookassa_request")
     def test_payment_status_by_status_token_syncs_success_and_confirms(self, mock_request):
