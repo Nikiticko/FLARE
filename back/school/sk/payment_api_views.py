@@ -18,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import AuditLog, LessonBalance, Payment, get_current_lesson_price_rub
+from .telegram_notifications import send_successful_payment_notification
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -131,6 +132,18 @@ def _finalize_successful_payment(payment_id: int, event_name: str = "YOOKASSA_PA
                 "role_changed": role_changed,
             },
         )
+
+        transaction.on_commit(lambda payment_id=payment.id: _send_payment_notification_after_commit(payment_id))
+
+
+def _send_payment_notification_after_commit(payment_id: int):
+    try:
+        payment = Payment.objects.select_related("student").get(pk=payment_id)
+    except Payment.DoesNotExist:
+        logger.warning("Skipping Telegram notification for missing payment_id=%s", payment_id)
+        return
+
+    send_successful_payment_notification(payment)
 
 
 def _sync_payment_status_from_provider(payment: Payment):

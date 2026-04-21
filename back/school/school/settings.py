@@ -243,6 +243,10 @@ YOOKASSA_RETURN_URL_SUCCESS = os.getenv("YOOKASSA_RETURN_URL_SUCCESS", "https://
 YOOKASSA_RETURN_URL_CANCEL = os.getenv("YOOKASSA_RETURN_URL_CANCEL", "https://flare-school.ru/payment/cancel")
 YOOKASSA_VAT_CODE = int(os.getenv("YOOKASSA_VAT_CODE", "1"))
 
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_NOTIFICATIONS_CHAT_ID = os.getenv("TELEGRAM_NOTIFICATIONS_CHAT_ID", "")
+TELEGRAM_NOTIFICATIONS_TIMEOUT_SECONDS = int(os.getenv("TELEGRAM_NOTIFICATIONS_TIMEOUT_SECONDS", "10"))
+
 # Белый список email'ов для создания админов через AdminLoginAPI
 # Первые 2 из этого списка могут стать суперпользователями
 ADMIN_SEED_EMAILS = [

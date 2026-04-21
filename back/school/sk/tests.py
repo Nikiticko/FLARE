@@ -16,6 +16,7 @@ from .lesson_balance_service import (
 )
 from .models import AuditLog, Lesson, LessonBalance, Payment, PaymentSettings
 from .payment_api_views import _finalize_successful_payment, sync_recent_pending_yookassa_payments
+from .telegram_notifications import build_successful_payment_message
 
 
 User = get_user_model()
@@ -187,6 +188,59 @@ class PaymentBusinessLogicTests(BaseBusinessLogicTestCase):
             AuditLog.objects.filter(action="YOOKASSA_PAYMENT_SUCCEEDED", meta__payment_id=payment.id).count(),
             1,
         )
+
+    @override_settings(
+        TELEGRAM_BOT_TOKEN="telegram-token",
+        TELEGRAM_NOTIFICATIONS_CHAT_ID="123456",
+    )
+    @patch("sk.telegram_notifications.urllib_request.urlopen")
+    def test_finalize_successful_payment_sends_telegram_notification_once(self, mock_urlopen):
+        class DummyResponse:
+            status = 200
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return b'{"ok": true, "result": {"message_id": 1}}'
+
+        mock_urlopen.return_value = DummyResponse()
+        payment = Payment.objects.create(
+            student=self.applicant,
+            amount=Decimal("3600.00"),
+            lessons_count=3,
+            confirmed=False,
+            yookassa_payment_id="yk-telegram-1",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            _finalize_successful_payment(payment.id)
+        with self.captureOnCommitCallbacks(execute=True):
+            _finalize_successful_payment(payment.id)
+
+        self.assertEqual(mock_urlopen.call_count, 1)
+        request_arg = mock_urlopen.call_args.args[0]
+        self.assertIn("https://api.telegram.org/bottelegram-token/sendMessage", request_arg.full_url)
+        self.assertIn("chat_id=123456", request_arg.data.decode("utf-8"))
+        self.assertIn("Email+%D0%BA%D0%BB%D0%B8%D0%B5%D0%BD%D1%82%D0%B0", request_arg.data.decode("utf-8"))
+
+    @patch("sk.telegram_notifications.urllib_request.urlopen")
+    def test_finalize_successful_payment_skips_telegram_when_not_configured(self, mock_urlopen):
+        payment = Payment.objects.create(
+            student=self.applicant,
+            amount=Decimal("1200.00"),
+            lessons_count=1,
+            confirmed=False,
+            yookassa_payment_id="yk-telegram-2",
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            _finalize_successful_payment(payment.id)
+
+        self.assertFalse(mock_urlopen.called)
 
     def test_manager_payment_confirmation_is_disabled(self):
         payment = Payment.objects.create(
@@ -444,3 +498,25 @@ class PaymentApiTests(BaseBusinessLogicTestCase):
         self.client.force_authenticate(self.manager)
         response = self.client.get(f"/api/payments/{payment.id}/status/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class TelegramNotificationFormattingTests(BaseBusinessLogicTestCase):
+    def test_build_successful_payment_message_contains_required_fields(self):
+        user = self.create_user(
+            "notify@example.com",
+            User.Roles.STUDENT,
+            parent_full_name="Иванов Иван",
+        )
+        payment = Payment.objects.create(
+            student=user,
+            amount=Decimal("4500.00"),
+            lessons_count=3,
+            confirmed=True,
+        )
+
+        message = build_successful_payment_message(payment)
+
+        self.assertIn("notify@example.com", message)
+        self.assertIn("Иванов Иван", message)
+        self.assertIn("Количество занятий: 3", message)
+        self.assertIn("Сумма: 4500,00 RUB", message)
