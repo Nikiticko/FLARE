@@ -157,6 +157,34 @@ def _sync_payment_status_from_provider(payment: Payment):
     return payment
 
 
+def sync_pending_yookassa_payments_for_user(user, limit: int = 5):
+    """
+    Best-effort sync for recent pending YooKassa payments.
+    This is a fallback when webhook delivery or return-page polling did not happen.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return 0
+
+    synced_count = 0
+    pending_payments = (
+        Payment.objects
+        .filter(
+            student=user,
+            confirmed=False,
+            yookassa_payment_id__gt="",
+        )
+        .exclude(yookassa_status__in=["succeeded", "canceled"])
+        .order_by("-paid_at")[:max(1, limit)]
+    )
+
+    for payment in pending_payments:
+        refreshed_payment = _sync_payment_status_from_provider(payment)
+        if refreshed_payment.confirmed:
+            synced_count += 1
+
+    return synced_count
+
+
 class YooKassaCreatePaymentAPI(APIView):
     permission_classes = [IsAuthenticated]
 

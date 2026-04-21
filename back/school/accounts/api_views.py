@@ -14,6 +14,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from school.logging_utils import log_security_event
 from sk.models import AuditLog
+from sk.payment_api_views import sync_pending_yookassa_payments_for_user
 
 from .cookie_utils import clear_auth_cookies, issue_tokens_for_user, set_auth_cookies
 from .serializers import (
@@ -257,6 +258,8 @@ class MeAPI(APIView):
     parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get(self, request):
+        sync_pending_yookassa_payments_for_user(request.user)
+        request.user.refresh_from_db()
         log_security_event(
             auth_logger,
             "auth.me.success",

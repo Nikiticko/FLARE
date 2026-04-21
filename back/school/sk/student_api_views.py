@@ -11,6 +11,7 @@ from accounts.permissions import (
     IsStudentOrApplicantOrTeacherOrManagerOrAdmin,
 )
 from .models import Course, Lesson, LessonBalance, Payment, StudentProfile, ClientRequest
+from .payment_api_views import sync_pending_yookassa_payments_for_user
 from .student_serializers import (
     StudentDashboardSerializer,
     UnifiedDashboardSerializer,
@@ -46,6 +47,8 @@ class UnifiedDashboardAPI(APIView):
 
     def get(self, request):
         user = request.user
+        sync_pending_yookassa_payments_for_user(user)
+        user.refresh_from_db()
         bal, _ = LessonBalance.objects.get_or_create(student=user)
 
         profile = None

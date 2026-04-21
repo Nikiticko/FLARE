@@ -301,6 +301,52 @@ class PaymentApiTests(BaseBusinessLogicTestCase):
         self.assertTrue(AuditLog.objects.filter(action="YOOKASSA_PAYMENT_SYNC_SUCCEEDED").exists())
 
     @patch("sk.payment_api_views._yookassa_request")
+    def test_auth_me_syncs_recent_pending_payment(self, mock_request):
+        payment = Payment.objects.create(
+            student=self.student,
+            amount=Decimal("3000.00"),
+            lessons_count=2,
+            confirmed=False,
+            yookassa_payment_id="yk-me-sync-1",
+            yookassa_status="pending",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+        self.client.force_authenticate(self.student)
+
+        response = self.client.get("/api/auth/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        balance = LessonBalance.objects.get(student=self.student)
+        self.student.refresh_from_db()
+        self.assertTrue(payment.confirmed)
+        self.assertEqual(payment.yookassa_status, "succeeded")
+        self.assertEqual(balance.lessons_available, 2)
+        self.assertEqual(self.student.role, User.Roles.STUDENT)
+
+    @patch("sk.payment_api_views._yookassa_request")
+    def test_dashboard_syncs_recent_pending_payment(self, mock_request):
+        payment = Payment.objects.create(
+            student=self.student,
+            amount=Decimal("1500.00"),
+            lessons_count=1,
+            confirmed=False,
+            yookassa_payment_id="yk-dashboard-sync-1",
+            yookassa_status="pending",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+        self.client.force_authenticate(self.student)
+
+        response = self.client.get("/api/dashboard/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        balance = LessonBalance.objects.get(student=self.student)
+        self.assertTrue(payment.confirmed)
+        self.assertEqual(payment.yookassa_status, "succeeded")
+        self.assertEqual(balance.lessons_available, 1)
+
+    @patch("sk.payment_api_views._yookassa_request")
     def test_payment_status_requires_owner_or_manager_without_status_token(self, mock_request):
         outsider = self.create_user("outsider@example.com", User.Roles.STUDENT)
         payment = Payment.objects.create(
