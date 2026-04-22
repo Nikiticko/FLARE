@@ -37,9 +37,9 @@ def build_successful_payment_message(payment) -> str:
     paid_at_local = timezone.localtime(paid_at)
 
     return (
-        "Успешная автопокупка занятий\n"
+        "Успешная покупка\n"
         f"Email клиента: {student_email}\n"
-        f"ФИО родителя: {parent_full_name}\n"
+        f"Имя родителя: {parent_full_name}\n"
         f"Количество занятий: {lessons_count}\n"
         f"Сумма: {_format_amount(amount)} RUB\n"
         f"Дата и время: {paid_at_local.strftime('%d.%m.%Y %H:%M:%S')}"
