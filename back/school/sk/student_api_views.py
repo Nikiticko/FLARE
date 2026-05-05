@@ -121,6 +121,8 @@ class StudentBalanceAPI(APIView):
     permission_classes = [IsAuthenticated, IsStudentOrAdmin]
 
     def get(self, request):
+        sync_pending_yookassa_payments_for_user(request.user)
+        request.user.refresh_from_db()
         bal, _ = LessonBalance.objects.get_or_create(student=request.user)
         ser = StudentBalanceSerializer(bal)
         return Response(ser.data)
@@ -133,6 +135,7 @@ class StudentPaymentsListAPI(generics.ListAPIView):
     serializer_class = StudentPaymentSerializer
 
     def get_queryset(self):
+        sync_pending_yookassa_payments_for_user(self.request.user)
         return Payment.objects.filter(student=self.request.user).order_by("-paid_at")
 
 

@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from accounts.permissions import IsApplicantOrAdmin
 from .models import ClientRequest, Course, LessonBalance, Payment
+from .payment_api_views import sync_pending_yookassa_payments_for_user
 from .applicant_serializers import (
     ApplicantBalanceSerializer,
     ApplicantClientRequestCreateSerializer,
@@ -48,6 +49,8 @@ class ApplicantBalanceAPI(APIView):
     permission_classes = [IsAuthenticated, IsApplicantOrAdmin]
 
     def get(self, request):
+        sync_pending_yookassa_payments_for_user(request.user)
+        request.user.refresh_from_db()
         bal, _ = LessonBalance.objects.get_or_create(student=request.user)
         ser = ApplicantBalanceSerializer(bal)
         return Response(ser.data)
@@ -63,6 +66,7 @@ class ApplicantPaymentsListAPI(generics.ListAPIView):
     serializer_class = ApplicantPaymentSerializer
 
     def get_queryset(self):
+        sync_pending_yookassa_payments_for_user(self.request.user)
         return Payment.objects.filter(student=self.request.user).order_by("-paid_at")
 
 

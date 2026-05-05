@@ -500,6 +500,48 @@ class PaymentApiTests(BaseBusinessLogicTestCase):
         self.assertEqual(balance.lessons_available, 1)
 
     @patch("sk.payment_api_views._yookassa_request")
+    def test_student_balance_syncs_recent_pending_payment(self, mock_request):
+        payment = Payment.objects.create(
+            student=self.student,
+            amount=Decimal("1500.00"),
+            lessons_count=1,
+            confirmed=False,
+            yookassa_payment_id="yk-student-balance-sync-1",
+            yookassa_status="pending",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+        self.client.force_authenticate(self.student)
+
+        response = self.client.get("/api/student/balance/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        balance = LessonBalance.objects.get(student=self.student)
+        self.assertTrue(payment.confirmed)
+        self.assertEqual(balance.lessons_available, 1)
+
+    @patch("sk.payment_api_views._yookassa_request")
+    def test_manager_balance_syncs_recent_pending_payment_for_student(self, mock_request):
+        payment = Payment.objects.create(
+            student=self.student,
+            amount=Decimal("3000.00"),
+            lessons_count=2,
+            confirmed=False,
+            yookassa_payment_id="yk-manager-balance-sync-1",
+            yookassa_status="pending",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+        self.client.force_authenticate(self.manager)
+
+        response = self.client.get(f"/api/manager/students/{self.student.id}/balance/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        payment.refresh_from_db()
+        balance = LessonBalance.objects.get(student=self.student)
+        self.assertTrue(payment.confirmed)
+        self.assertEqual(balance.lessons_available, 2)
+
+    @patch("sk.payment_api_views._yookassa_request")
     def test_payment_status_requires_owner_or_manager_without_status_token(self, mock_request):
         outsider = self.create_user("outsider@example.com", User.Roles.STUDENT)
         payment = Payment.objects.create(

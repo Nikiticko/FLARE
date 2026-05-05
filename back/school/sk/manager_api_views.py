@@ -8,6 +8,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from accounts.permissions import IsManagerOrAdmin
 from .models import Lesson, LessonBalance, Payment, AuditLog, ClientRequest
 from .lesson_balance_service import apply_lesson_status_transition, debit_lesson_balance, reserve_lesson_slot
+from .payment_api_views import sync_pending_yookassa_payments_for_user, sync_recent_pending_yookassa_payments
 from .manager_serializers import (
     ManagerClientSerializer,
     ManagerLessonSerializer,
@@ -356,6 +357,10 @@ class ManagerPaymentsListCreateAPI(generics.ListAPIView):
     filterset_fields = ["confirmed", "student"]
     ordering_fields = ["paid_at", "amount", "id"]
 
+    def list(self, request, *args, **kwargs):
+        sync_recent_pending_yookassa_payments(limit_per_user=5, max_age_hours=72)
+        return super().list(request, *args, **kwargs)
+
 
 class ManagerPaymentConfirmAPI(APIView):
     """
@@ -387,6 +392,14 @@ class ManagerStudentBalanceAPI(generics.RetrieveAPIView):
 
     def get_object(self):
         student_id = self.kwargs["student_id"]
+        try:
+            student = User.objects.get(pk=student_id)
+        except User.DoesNotExist:
+            from django.http import Http404
+
+            raise Http404("student not found")
+
+        sync_pending_yookassa_payments_for_user(student)
         bal, _ = LessonBalance.objects.get_or_create(student_id=student_id)
         return bal
 
