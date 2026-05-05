@@ -35,6 +35,11 @@ jobs:
             python manage.py migrate
             python manage.py collectstatic --noinput
 
+            cp /var/www/shkila/deploy/systemd/shkila-payment-sync.service /etc/systemd/system/
+            cp /var/www/shkila/deploy/systemd/shkila-payment-sync.timer /etc/systemd/system/
+            systemctl daemon-reload
+            systemctl enable --now shkila-payment-sync.timer
+
             systemctl restart shkila
 
             cd /var/www/shkila/front
