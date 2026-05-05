@@ -35,9 +35,15 @@ def pick_random(items):
     return random.choice(items)
 
 
-def normalized_time(base_dt, hour):
+def normalized_time(base_dt, start_hour, slot_index=0, slots_per_day=8):
     local = timezone.localtime(base_dt)
-    return local.replace(hour=hour, minute=0, second=0, microsecond=0)
+    day_offset, hour_offset = divmod(slot_index, slots_per_day)
+    return (local + timedelta(days=day_offset)).replace(
+        hour=start_hour + hour_offset,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
 
 
 def create_lesson(student, teacher, course, status, scheduled_at):
@@ -96,23 +102,23 @@ def main():
             course = pick_random(courses)
 
             # CANCELLED: 2+ дней назад утром
-            cancelled_at = normalized_time(now - timedelta(days=2 + i), hour=10 + i)
+            cancelled_at = normalized_time(now - timedelta(days=2 + i), start_hour=10, slot_index=i)
             create_lesson(student, teacher, course, Lesson.STATUS_CANCELLED, cancelled_at)
             created += 1
 
             # DONE: 1+ день назад днём
-            done_at = normalized_time(now - timedelta(days=1 + i), hour=12 + i)
+            done_at = normalized_time(now - timedelta(days=1 + i), start_hour=12, slot_index=i)
             create_lesson(student, teacher, course, Lesson.STATUS_DONE, done_at)
             created += 1
 
             # PLANNED: 1+ день в будущем вечером
-            planned_at = normalized_time(now + timedelta(days=1 + i), hour=16 + i)
+            planned_at = normalized_time(now + timedelta(days=1 + i), start_hour=16, slot_index=i, slots_per_day=6)
             create_lesson(student, teacher, course, Lesson.STATUS_PLANNED, planned_at)
             created += 1
 
             # TRIAL: пробное занятие (если указан флаг --with-trial)
             if args.with_trial:
-                trial_at = normalized_time(now + timedelta(days=2 + i), hour=14 + i)
+                trial_at = normalized_time(now + timedelta(days=2 + i), start_hour=14, slot_index=i, slots_per_day=6)
                 Lesson.objects.create(
                     student=student,
                     parent_full_name=student.parent_full_name or "",
