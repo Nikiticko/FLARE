@@ -1,0 +1,13 @@
+[Unit]
+Description=Run Shkila YooKassa payment reconciliation every 5 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Persistent=true
+Unit=shkila-payment-sync.service
+
+[Install]
+WantedBy=timers.target
+

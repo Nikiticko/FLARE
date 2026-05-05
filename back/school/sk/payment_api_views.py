@@ -22,6 +22,7 @@ from .telegram_notifications import send_successful_payment_notification
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
+YOOKASSA_CANCELED_STATUSES = ("canceled",)
 
 
 class YooKassaCreatePaymentSerializer(serializers.Serializer):
@@ -95,9 +96,22 @@ def _finalize_successful_payment(payment_id: int, event_name: str = "YOOKASSA_PA
         try:
             payment = Payment.objects.select_for_update().select_related("student").get(pk=payment_id)
         except Payment.DoesNotExist:
+            logger.warning(
+                "Payment finalize skipped: payment not found",
+                extra={"event": "payment.finalize.missing", "payment_id": payment_id},
+            )
             return
 
         if payment.confirmed:
+            logger.info(
+                "Payment finalize skipped: already confirmed",
+                extra={
+                    "event": "payment.finalize.already_confirmed",
+                    "payment_id": payment.id,
+                    "yookassa_payment_id": payment.yookassa_payment_id,
+                    "student_id": payment.student_id,
+                },
+            )
             return
 
         lessons_to_add = payment.lessons_count
@@ -133,6 +147,22 @@ def _finalize_successful_payment(payment_id: int, event_name: str = "YOOKASSA_PA
             },
         )
 
+        logger.info(
+            "Payment finalized and lessons credited",
+            extra={
+                "event": "payment.finalize.success",
+                "payment_id": payment.id,
+                "yookassa_payment_id": payment.yookassa_payment_id,
+                "student_id": payment.student_id,
+                "lessons_added": lessons_to_add,
+                "new_balance": lb.lessons_available,
+                "old_role": old_role,
+                "new_role": payment.student.role,
+                "role_changed": role_changed,
+                "source_event": event_name,
+            },
+        )
+
         transaction.on_commit(lambda payment_id=payment.id: _send_payment_notification_after_commit(payment_id))
 
 
@@ -148,6 +178,14 @@ def _send_payment_notification_after_commit(payment_id: int):
 
 def _sync_payment_status_from_provider(payment: Payment):
     if not payment.yookassa_payment_id:
+        logger.warning(
+            "YooKassa sync skipped: missing provider payment id",
+            extra={
+                "event": "payment.sync.missing_provider_id",
+                "payment_id": payment.id,
+                "student_id": payment.student_id,
+            },
+        )
         return payment
 
     try:
@@ -162,8 +200,20 @@ def _sync_payment_status_from_provider(payment: Payment):
 
     provider_status = provider_payment.get("status", "")
     if provider_status and provider_status != payment.yookassa_status:
+        old_status = payment.yookassa_status
         payment.yookassa_status = provider_status
         payment.save(update_fields=["yookassa_status"])
+        logger.info(
+            "YooKassa payment status updated",
+            extra={
+                "event": "payment.sync.status_updated",
+                "payment_id": payment.id,
+                "yookassa_payment_id": payment.yookassa_payment_id,
+                "student_id": payment.student_id,
+                "old_status": old_status,
+                "new_status": provider_status,
+            },
+        )
 
     if provider_status == "succeeded" and not payment.confirmed:
         _finalize_successful_payment(payment.id, event_name="YOOKASSA_PAYMENT_SYNC_SUCCEEDED")
@@ -188,7 +238,7 @@ def sync_pending_yookassa_payments_for_user(user, limit: int = 5):
             confirmed=False,
             yookassa_payment_id__gt="",
         )
-        .exclude(yookassa_status__in=["succeeded", "canceled"])
+        .exclude(yookassa_status__in=YOOKASSA_CANCELED_STATUSES)
         .order_by("-paid_at")[:max(1, limit)]
     )
 
@@ -214,7 +264,7 @@ def sync_recent_pending_yookassa_payments(limit_per_user: int = 5, max_age_hours
             yookassa_payment_id__gt="",
             paid_at__gte=cutoff,
         )
-        .exclude(yookassa_status__in=["succeeded", "canceled"])
+        .exclude(yookassa_status__in=YOOKASSA_CANCELED_STATUSES)
         .order_by("student_id", "-paid_at")
     )
 
@@ -232,6 +282,18 @@ def sync_recent_pending_yookassa_payments(limit_per_user: int = 5, max_age_hours
         checked += 1
         if refreshed_payment.confirmed:
             confirmed += 1
+
+    logger.info(
+        "Recent YooKassa payments sync completed",
+        extra={
+            "event": "payment.sync.batch_completed",
+            "checked": checked,
+            "confirmed": confirmed,
+            "users": len(per_user_counts),
+            "limit_per_user": max(1, limit_per_user),
+            "max_age_hours": max(1, max_age_hours),
+        },
+    )
 
     return {
         "checked": checked,
@@ -346,6 +408,19 @@ class YooKassaCreatePaymentAPI(APIView):
         payment.idempotence_key = idempotence_key
         payment.save(update_fields=["yookassa_payment_id", "yookassa_status", "idempotence_key"])
 
+        logger.info(
+            "YooKassa payment created",
+            extra={
+                "event": "payment.create.success",
+                "payment_id": payment.id,
+                "yookassa_payment_id": payment.yookassa_payment_id,
+                "student_id": user.id,
+                "lessons_count": lessons_count,
+                "amount": amount_value,
+                "provider_status": payment.yookassa_status,
+            },
+        )
+
         confirmation_url = (yk_response.get("confirmation") or {}).get("confirmation_url")
         if not confirmation_url:
             return Response({"detail": "missing confirmation_url from provider"}, status=502)
@@ -428,6 +503,15 @@ class YooKassaWebhookAPI(APIView):
         event = request.data.get("event")
         payment_object = request.data.get("object") or {}
         yookassa_payment_id = payment_object.get("id")
+
+        logger.info(
+            "YooKassa webhook received",
+            extra={
+                "event": "payment.webhook.received",
+                "provider_event": event,
+                "yookassa_payment_id": yookassa_payment_id,
+            },
+        )
 
         if not yookassa_payment_id:
             return JsonResponse({"detail": "ok"}, status=200)

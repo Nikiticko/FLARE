@@ -311,6 +311,27 @@ class PaymentBusinessLogicTests(BaseBusinessLogicTestCase):
         self.assertTrue(first_payment.confirmed)
         self.assertTrue(second_payment.confirmed)
 
+    @patch("sk.payment_api_views._yookassa_request")
+    def test_sync_recent_pending_yookassa_payments_checks_local_succeeded_unconfirmed_entries(self, mock_request):
+        payment = Payment.objects.create(
+            student=self.applicant,
+            amount=Decimal("1200.00"),
+            lessons_count=1,
+            confirmed=False,
+            yookassa_payment_id="yk-local-succeeded-1",
+            yookassa_status="succeeded",
+        )
+        mock_request.return_value = (200, {"status": "succeeded"})
+
+        stats = sync_recent_pending_yookassa_payments(limit_per_user=5, max_age_hours=48)
+
+        self.assertEqual(stats["checked"], 1)
+        self.assertEqual(stats["confirmed"], 1)
+        payment.refresh_from_db()
+        balance = LessonBalance.objects.get(student=self.applicant)
+        self.assertTrue(payment.confirmed)
+        self.assertEqual(balance.lessons_available, 1)
+
 
 @override_settings(
     YOOKASSA_SHOP_ID="shop-id",
