@@ -92,25 +92,32 @@
           <label class="field">
             <span>Email ученика *</span>
             <div class="email-input-wrapper">
-              <input
-                v-model="formStudentEmail"
-                type="email"
-                :list="`student-email-list-${canSelectTeacher ? 'manager' : 'teacher'}`"
-                placeholder="student@example.com"
-                required
-                @blur="validateStudentEmail"
-                @input="handleStudentEmailInput"
-                autocomplete="off"
-              />
-              <datalist :id="`student-email-list-${canSelectTeacher ? 'manager' : 'teacher'}`">
-                <option
-                  v-for="student in studentAutocompleteList"
-                  :key="student.id"
-                  :value="student.email"
-                >
-                  {{ student.student_full_name || student.email }}
-                </option>
-              </datalist>
+              <div class="email-autocomplete">
+                <input
+                  v-model="formStudentEmail"
+                  type="email"
+                  placeholder="student@example.com"
+                  required
+                  @focus="openStudentSuggestions"
+                  @blur="validateStudentEmail"
+                  @input="handleStudentEmailInput"
+                  autocomplete="off"
+                />
+                <div v-if="showStudentSuggestions" class="suggestions-list">
+                  <button
+                    v-for="student in studentAutocompleteList"
+                    :key="student.id"
+                    type="button"
+                    class="suggestion-item"
+                    @mousedown.prevent="selectStudentSuggestion(student)"
+                  >
+                    <span class="suggestion-email">{{ student.email }}</span>
+                    <span v-if="student.student_full_name || student.parent_full_name" class="suggestion-name">
+                      {{ student.student_full_name || student.parent_full_name }}
+                    </span>
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 class="btn-search"
@@ -130,25 +137,32 @@
           <label v-if="canSelectTeacher" class="field">
             <span>Email учителя *</span>
             <div class="email-input-wrapper">
-              <input
-                v-model="formTeacherEmail"
-                type="email"
-                list="teacher-email-list-manager"
-                placeholder="teacher@example.com"
-                required
-                @blur="validateTeacherEmail"
-                @input="handleTeacherEmailInput"
-                autocomplete="off"
-              />
-              <datalist id="teacher-email-list-manager">
-                <option
-                  v-for="teacher in teacherAutocompleteList"
-                  :key="teacher.id"
-                  :value="teacher.email"
-                >
-                  {{ teacher.email }}
-                </option>
-              </datalist>
+              <div class="email-autocomplete">
+                <input
+                  v-model="formTeacherEmail"
+                  type="email"
+                  placeholder="teacher@example.com"
+                  required
+                  @focus="openTeacherSuggestions"
+                  @blur="validateTeacherEmail"
+                  @input="handleTeacherEmailInput"
+                  autocomplete="off"
+                />
+                <div v-if="showTeacherSuggestions" class="suggestions-list">
+                  <button
+                    v-for="teacher in teacherAutocompleteList"
+                    :key="teacher.id"
+                    type="button"
+                    class="suggestion-item"
+                    @mousedown.prevent="selectTeacherSuggestion(teacher)"
+                  >
+                    <span class="suggestion-email">{{ teacher.email }}</span>
+                    <span v-if="teacher.student_full_name || teacher.parent_full_name" class="suggestion-name">
+                      {{ teacher.student_full_name || teacher.parent_full_name }}
+                    </span>
+                  </button>
+                </div>
+              </div>
               <button
                 type="button"
                 class="btn-search"
@@ -627,6 +641,8 @@ const teacherError = ref('')
 const studentAutocompleteList = ref([])
 const teacherAutocompleteList = ref([])
 const autocompleteLoading = ref(false)
+const studentSuggestionsOpen = ref(false)
+const teacherSuggestionsOpen = ref(false)
 let studentAutocompleteTimeout = null
 let teacherAutocompleteTimeout = null
 
@@ -680,6 +696,8 @@ const openCreate = async (iso, hour, minutes = 0) => {
 
 const closeCreate = () => {
   showCreateModal.value = false
+  studentSuggestionsOpen.value = false
+  teacherSuggestionsOpen.value = false
 }
 
 const searchStudent = async () => {
@@ -770,6 +788,55 @@ const clearTeacherError = () => {
   foundTeacher.value = null
 }
 
+const showStudentSuggestions = computed(() => {
+  return studentSuggestionsOpen.value && studentAutocompleteList.value.length > 0
+})
+
+const showTeacherSuggestions = computed(() => {
+  return teacherSuggestionsOpen.value && teacherAutocompleteList.value.length > 0
+})
+
+const openStudentSuggestions = () => {
+  studentSuggestionsOpen.value = true
+  const value = formStudentEmail.value.trim()
+  if (value.length >= 2 && studentAutocompleteList.value.length === 0) {
+    loadStudentAutocomplete(value)
+  }
+}
+
+const openTeacherSuggestions = () => {
+  teacherSuggestionsOpen.value = true
+  const value = formTeacherEmail.value.trim()
+  if (value.length >= 2 && teacherAutocompleteList.value.length === 0) {
+    loadTeacherAutocomplete(value)
+  }
+}
+
+const selectStudentSuggestion = async (student) => {
+  formStudentEmail.value = student.email
+  foundStudent.value = student
+  studentError.value = ''
+  studentSuggestionsOpen.value = false
+
+  if (props.onGetLastLessonForStudent && student.id) {
+    try {
+      const lastLesson = await props.onGetLastLessonForStudent(student.id)
+      if (lastLesson?.course_id) {
+        formCourseId.value = lastLesson.course_id
+      }
+    } catch (_) {
+      // Курс остается выбранным вручную.
+    }
+  }
+}
+
+const selectTeacherSuggestion = (teacher) => {
+  formTeacherEmail.value = teacher.email
+  foundTeacher.value = teacher
+  teacherError.value = ''
+  teacherSuggestionsOpen.value = false
+}
+
 // Загрузка списков для автодополнения
 const loadStudentAutocomplete = async (search = '') => {
   if (!props.onGetAutocomplete) return
@@ -805,6 +872,7 @@ const loadTeacherAutocomplete = async (search = '') => {
 const handleStudentEmailInput = (event) => {
   const value = event.target.value.trim()
   clearStudentError()
+  studentSuggestionsOpen.value = true
   
   // Очищаем предыдущий таймер
   if (studentAutocompleteTimeout) {
@@ -824,6 +892,7 @@ const handleStudentEmailInput = (event) => {
 const handleTeacherEmailInput = (event) => {
   const value = event.target.value.trim()
   clearTeacherError()
+  teacherSuggestionsOpen.value = true
   
   // Очищаем предыдущий таймер
   if (teacherAutocompleteTimeout) {
@@ -1864,10 +1933,75 @@ defineExpose({
 .email-input-wrapper {
   display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
 
-.email-input-wrapper input {
+.email-input-wrapper input,
+.email-autocomplete {
   flex: 1;
+  min-width: 0;
+}
+
+.email-autocomplete {
+  position: relative;
+}
+
+.email-autocomplete input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.suggestions-list {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: rgba(32, 32, 32, 0.98);
+  border: 2px solid rgba(255, 215, 0, 0.55);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.suggestion-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: #FFFFFF;
+  cursor: pointer;
+  text-align: left;
+}
+
+.suggestion-item:last-child {
+  border-bottom: 0;
+}
+
+.suggestion-item:hover {
+  background: rgba(255, 215, 0, 0.14);
+}
+
+.suggestion-email {
+  margin: 0;
+  color: #FFFFFF;
+  font-size: 0.9rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-name {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.78rem;
+  font-weight: 500;
+  overflow-wrap: anywhere;
 }
 
 .btn-search {
