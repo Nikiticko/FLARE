@@ -101,15 +101,22 @@
                   @focus="openStudentSuggestions"
                   @blur="validateStudentEmail"
                   @input="handleStudentEmailInput"
+                  @keydown.down.prevent="moveStudentSuggestion(1)"
+                  @keydown.up.prevent="moveStudentSuggestion(-1)"
+                  @keydown.enter="selectActiveStudentSuggestion"
+                  @keydown.esc="closeStudentSuggestions"
                   autocomplete="off"
                 />
-                <div v-if="showStudentSuggestions" class="suggestions-list">
+                <div v-if="showStudentSuggestions" ref="studentSuggestionsListRef" class="suggestions-list">
                   <button
-                    v-for="student in studentAutocompleteList"
+                    v-for="(student, index) in studentAutocompleteList"
                     :key="student.id"
+                    :ref="(el) => setStudentSuggestionRef(el, index)"
                     type="button"
                     class="suggestion-item"
+                    :class="{ 'suggestion-item--active': index === activeStudentSuggestionIndex }"
                     @mousedown.prevent="selectStudentSuggestion(student)"
+                    @mouseenter="activeStudentSuggestionIndex = index"
                   >
                     <span class="suggestion-email">{{ student.email }}</span>
                     <span v-if="student.student_full_name || student.parent_full_name" class="suggestion-name">
@@ -146,15 +153,22 @@
                   @focus="openTeacherSuggestions"
                   @blur="validateTeacherEmail"
                   @input="handleTeacherEmailInput"
+                  @keydown.down.prevent="moveTeacherSuggestion(1)"
+                  @keydown.up.prevent="moveTeacherSuggestion(-1)"
+                  @keydown.enter="selectActiveTeacherSuggestion"
+                  @keydown.esc="closeTeacherSuggestions"
                   autocomplete="off"
                 />
-                <div v-if="showTeacherSuggestions" class="suggestions-list">
+                <div v-if="showTeacherSuggestions" ref="teacherSuggestionsListRef" class="suggestions-list">
                   <button
-                    v-for="teacher in teacherAutocompleteList"
+                    v-for="(teacher, index) in teacherAutocompleteList"
                     :key="teacher.id"
+                    :ref="(el) => setTeacherSuggestionRef(el, index)"
                     type="button"
                     class="suggestion-item"
+                    :class="{ 'suggestion-item--active': index === activeTeacherSuggestionIndex }"
                     @mousedown.prevent="selectTeacherSuggestion(teacher)"
+                    @mouseenter="activeTeacherSuggestionIndex = index"
                   >
                     <span class="suggestion-email">{{ teacher.email }}</span>
                     <span v-if="teacher.student_full_name || teacher.parent_full_name" class="suggestion-name">
@@ -317,7 +331,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const props = defineProps({
@@ -643,6 +657,12 @@ const teacherAutocompleteList = ref([])
 const autocompleteLoading = ref(false)
 const studentSuggestionsOpen = ref(false)
 const teacherSuggestionsOpen = ref(false)
+const activeStudentSuggestionIndex = ref(-1)
+const activeTeacherSuggestionIndex = ref(-1)
+const studentSuggestionsListRef = ref(null)
+const teacherSuggestionsListRef = ref(null)
+const studentSuggestionRefs = ref([])
+const teacherSuggestionRefs = ref([])
 let studentAutocompleteTimeout = null
 let teacherAutocompleteTimeout = null
 
@@ -698,6 +718,8 @@ const closeCreate = () => {
   showCreateModal.value = false
   studentSuggestionsOpen.value = false
   teacherSuggestionsOpen.value = false
+  activeStudentSuggestionIndex.value = -1
+  activeTeacherSuggestionIndex.value = -1
 }
 
 const searchStudent = async () => {
@@ -812,11 +834,96 @@ const openTeacherSuggestions = () => {
   }
 }
 
+const closeStudentSuggestions = () => {
+  studentSuggestionsOpen.value = false
+  activeStudentSuggestionIndex.value = -1
+}
+
+const closeTeacherSuggestions = () => {
+  teacherSuggestionsOpen.value = false
+  activeTeacherSuggestionIndex.value = -1
+}
+
+const moveSuggestionIndex = (currentIndex, listLength, direction) => {
+  if (listLength <= 0) return -1
+  if (currentIndex < 0) return direction > 0 ? 0 : listLength - 1
+  return (currentIndex + direction + listLength) % listLength
+}
+
+const setStudentSuggestionRef = (el, index) => {
+  if (el) {
+    studentSuggestionRefs.value[index] = el
+  }
+}
+
+const setTeacherSuggestionRef = (el, index) => {
+  if (el) {
+    teacherSuggestionRefs.value[index] = el
+  }
+}
+
+const scrollActiveSuggestionIntoView = (listRef, itemRefs, activeIndex) => {
+  nextTick(() => {
+    const listEl = listRef.value
+    const itemEl = itemRefs.value[activeIndex.value]
+    if (!listEl || !itemEl) return
+
+    const itemTop = itemEl.offsetTop
+    const itemBottom = itemTop + itemEl.offsetHeight
+    const visibleTop = listEl.scrollTop
+    const visibleBottom = visibleTop + listEl.clientHeight
+
+    if (itemTop < visibleTop) {
+      listEl.scrollTop = itemTop
+    } else if (itemBottom > visibleBottom) {
+      listEl.scrollTop = itemBottom - listEl.clientHeight
+    }
+  })
+}
+
+const moveStudentSuggestion = (direction) => {
+  if (!studentAutocompleteList.value.length) return
+  studentSuggestionsOpen.value = true
+  activeStudentSuggestionIndex.value = moveSuggestionIndex(
+    activeStudentSuggestionIndex.value,
+    studentAutocompleteList.value.length,
+    direction
+  )
+  scrollActiveSuggestionIntoView(studentSuggestionsListRef, studentSuggestionRefs, activeStudentSuggestionIndex)
+}
+
+const moveTeacherSuggestion = (direction) => {
+  if (!teacherAutocompleteList.value.length) return
+  teacherSuggestionsOpen.value = true
+  activeTeacherSuggestionIndex.value = moveSuggestionIndex(
+    activeTeacherSuggestionIndex.value,
+    teacherAutocompleteList.value.length,
+    direction
+  )
+  scrollActiveSuggestionIntoView(teacherSuggestionsListRef, teacherSuggestionRefs, activeTeacherSuggestionIndex)
+}
+
+const selectActiveStudentSuggestion = (event) => {
+  const student = studentAutocompleteList.value[activeStudentSuggestionIndex.value]
+  if (student && showStudentSuggestions.value) {
+    event?.preventDefault()
+    selectStudentSuggestion(student)
+  }
+}
+
+const selectActiveTeacherSuggestion = (event) => {
+  const teacher = teacherAutocompleteList.value[activeTeacherSuggestionIndex.value]
+  if (teacher && showTeacherSuggestions.value) {
+    event?.preventDefault()
+    selectTeacherSuggestion(teacher)
+  }
+}
+
 const selectStudentSuggestion = async (student) => {
   formStudentEmail.value = student.email
   foundStudent.value = student
   studentError.value = ''
-  studentSuggestionsOpen.value = false
+  closeStudentSuggestions()
 
   if (props.onGetLastLessonForStudent && student.id) {
     try {
@@ -834,7 +941,7 @@ const selectTeacherSuggestion = (teacher) => {
   formTeacherEmail.value = teacher.email
   foundTeacher.value = teacher
   teacherError.value = ''
-  teacherSuggestionsOpen.value = false
+  closeTeacherSuggestions()
 }
 
 // Загрузка списков для автодополнения
@@ -845,9 +952,11 @@ const loadStudentAutocomplete = async (search = '') => {
     autocompleteLoading.value = true
     const result = await props.onGetAutocomplete('student', search)
     studentAutocompleteList.value = Array.isArray(result) ? result : result.data || []
+    activeStudentSuggestionIndex.value = studentAutocompleteList.value.length ? 0 : -1
   } catch (err) {
     console.error('load student autocomplete error:', err)
     studentAutocompleteList.value = []
+    activeStudentSuggestionIndex.value = -1
   } finally {
     autocompleteLoading.value = false
   }
@@ -860,9 +969,11 @@ const loadTeacherAutocomplete = async (search = '') => {
     autocompleteLoading.value = true
     const result = await props.onGetAutocomplete('teacher', search)
     teacherAutocompleteList.value = Array.isArray(result) ? result : result.data || []
+    activeTeacherSuggestionIndex.value = teacherAutocompleteList.value.length ? 0 : -1
   } catch (err) {
     console.error('load teacher autocomplete error:', err)
     teacherAutocompleteList.value = []
+    activeTeacherSuggestionIndex.value = -1
   } finally {
     autocompleteLoading.value = false
   }
@@ -886,6 +997,7 @@ const handleStudentEmailInput = (event) => {
     }, 300)
   } else {
     studentAutocompleteList.value = []
+    activeStudentSuggestionIndex.value = -1
   }
 }
 
@@ -906,6 +1018,7 @@ const handleTeacherEmailInput = (event) => {
     }, 300)
   } else {
     teacherAutocompleteList.value = []
+    activeTeacherSuggestionIndex.value = -1
   }
 }
 
@@ -1984,8 +2097,14 @@ defineExpose({
   border-bottom: 0;
 }
 
-.suggestion-item:hover {
+.suggestion-item:hover,
+.suggestion-item--active {
   background: rgba(255, 215, 0, 0.14);
+}
+
+.suggestion-item--active {
+  outline: 1px solid rgba(255, 215, 0, 0.45);
+  outline-offset: -1px;
 }
 
 .suggestion-email {
