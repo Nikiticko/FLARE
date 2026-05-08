@@ -578,6 +578,7 @@ const lessonsWithPositions = computed(() => {
   const result = []
   const startHour = timeSlots[0]
   const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  const dayLessonsMap = new Map()
   
   for (const lesson of props.lessons) {
     if (!lesson.id || !lesson.scheduled_at) continue
@@ -591,29 +592,76 @@ const lessonsWithPositions = computed(() => {
     const dayIndex = weekDays.value.findIndex(day => day.iso === lessonIso)
     if (dayIndex < 0) continue // Урок вне текущей недели
     
-    // Вычисляем позицию по вертикали (учитываем часы и минуты)
-    const lessonHour = dt.getHours()
-    const lessonMinutes = dt.getMinutes()
-    const totalMinutes = lessonHour * 60 + lessonMinutes
-    const minutesFromStart = totalMinutes - startHour * 60
-    const top = (minutesFromStart / 60) * slotHeight
-    
-    // Вычисляем позицию по горизонтали
-    const left = timeColWidth + dayWidth * dayIndex
-    const width = dayWidth * 0.8 // Занимаем 80% ширины колонки дня
-    
-    // Высота карточки = 1 час
-    const height = slotHeight
-    
-    result.push({
+    const startMinutes = dt.getHours() * 60 + dt.getMinutes()
+    const endMinutes = startMinutes + 60
+    const item = {
       lesson,
-      style: {
-        top: `${top}px`,
-        left: `${left}px`,
-        width: `${width}px`,
-        height: `${height}px`
-      }
+      dt,
+      dayIndex,
+      startMinutes,
+      endMinutes,
+      createdAt: lesson.created_at ? new Date(lesson.created_at).getTime() : 0,
+    }
+
+    if (!dayLessonsMap.has(dayIndex)) {
+      dayLessonsMap.set(dayIndex, [])
+    }
+    dayLessonsMap.get(dayIndex).push(item)
+  }
+
+  for (const [dayIndex, dayLessons] of dayLessonsMap.entries()) {
+    const sortedLessons = [...dayLessons].sort((a, b) => {
+      if (a.startMinutes !== b.startMinutes) return a.startMinutes - b.startMinutes
+      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
+      return Number(a.lesson.id) - Number(b.lesson.id)
     })
+
+    const overlapGroups = []
+    let currentGroup = []
+    let currentGroupEnd = -1
+
+    for (const item of sortedLessons) {
+      if (!currentGroup.length || item.startMinutes < currentGroupEnd) {
+        currentGroup.push(item)
+        currentGroupEnd = Math.max(currentGroupEnd, item.endMinutes)
+      } else {
+        overlapGroups.push(currentGroup)
+        currentGroup = [item]
+        currentGroupEnd = item.endMinutes
+      }
+    }
+
+    if (currentGroup.length) {
+      overlapGroups.push(currentGroup)
+    }
+
+    for (const group of overlapGroups) {
+      const orderedGroup = [...group].sort((a, b) => {
+        if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt
+        return Number(a.lesson.id) - Number(b.lesson.id)
+      })
+      const columnCount = orderedGroup.length
+      const gap = columnCount > 1 ? 2 : 0
+      const availableWidth = dayWidth * 0.96
+      const cardWidth = Math.max(1, (availableWidth - gap * (columnCount - 1)) / columnCount)
+
+      orderedGroup.forEach((item, columnIndex) => {
+        const minutesFromStart = item.startMinutes - startHour * 60
+        const top = (minutesFromStart / 60) * slotHeight
+        const left = timeColWidth + dayWidth * dayIndex + dayWidth * 0.02 + columnIndex * (cardWidth + gap)
+        const height = ((item.endMinutes - item.startMinutes) / 60) * slotHeight
+
+        result.push({
+          lesson: item.lesson,
+          style: {
+            top: `${top}px`,
+            left: `${left}px`,
+            width: `${cardWidth}px`,
+            height: `${height}px`
+          }
+        })
+      })
+    }
   }
   
   return result
@@ -2084,7 +2132,7 @@ defineExpose({
   position: absolute;
   color: #ffffff;
   border-radius: 4px;
-  padding: 3px 5px;
+  padding: 3px 4px;
   margin: 0;
   font-size: 12px;
   cursor: pointer;
@@ -2159,7 +2207,7 @@ defineExpose({
 
 .lesson-time {
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
@@ -2169,8 +2217,8 @@ defineExpose({
 }
 
 .lesson-student {
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 11px;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
