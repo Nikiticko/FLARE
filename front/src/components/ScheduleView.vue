@@ -1771,7 +1771,7 @@ defineExpose({
   margin: 0;
   font-size: 12px;
   cursor: pointer;
-  transition: box-shadow 0.2s ease;
+  transition: none;
   flex: 1 1 0;
   min-width: 0;
   height: 100%;
@@ -1782,7 +1782,7 @@ defineExpose({
   flex-direction: column;
   justify-content: flex-start;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
   border-left: 3px solid transparent;
   align-self: stretch;
   position: relative;
@@ -1808,7 +1808,6 @@ defineExpose({
 }
 
 .lesson-card:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   z-index: 5;
 }
 
@@ -1834,11 +1833,11 @@ defineExpose({
 .lesson-card--trial {
   background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
   border-left-color: #ea580c;
-  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: none;
 }
 
 .lesson-card--trial:hover {
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: none;
 }
 
 /* Комбинации пробного занятия со статусами */
@@ -1869,7 +1868,7 @@ defineExpose({
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   z-index: 10;
 }
 
@@ -1882,12 +1881,12 @@ defineExpose({
   margin: 0;
   font-size: 12px;
   cursor: pointer;
-  transition: box-shadow 0.2s ease, z-index 0s;
+  transition: none;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
   border-left: 3px solid transparent;
   z-index: 3;
   isolation: isolate;
@@ -1895,7 +1894,6 @@ defineExpose({
 }
 
 .lesson-card-positioned:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   z-index: 100 !important;
 }
 
@@ -1918,11 +1916,11 @@ defineExpose({
 .lesson-card-positioned.lesson-card--trial {
   background: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
   border-left-color: #ea580c;
-  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: none;
 }
 
 .lesson-card-positioned.lesson-card--trial:hover {
-  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: none;
 }
 
 .lesson-card-positioned.lesson-card--trial.lesson-card--planned {
