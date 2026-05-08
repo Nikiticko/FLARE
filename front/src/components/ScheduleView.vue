@@ -61,10 +61,14 @@
             :class="[
               'lesson-card-positioned', 
               `lesson-card--${item.lesson.status?.toLowerCase() || 'planned'}`,
-              { 'lesson-card--trial': item.lesson.is_trial }
+              {
+                'lesson-card--trial': item.lesson.is_trial,
+                'lesson-card-positioned--dragging': item.lesson.id === draggingLessonId
+              }
             ]"
             :style="item.style"
-            @click="selectLesson(item.lesson)"
+            @pointerdown.stop="startLessonDrag($event, item.lesson)"
+            @click="handleLessonClick($event, item.lesson)"
             :title="`ID: ${item.lesson.id}`"
           >
             <div class="lesson-time">
@@ -80,6 +84,7 @@
 
       <p v-if="lessonsLoading" class="status-text">Загружаем уроки...</p>
       <p v-if="lessonsError" class="error">{{ lessonsError }}</p>
+      <p v-if="dragError" class="error">{{ dragError }}</p>
     </section>
 
 
@@ -532,6 +537,13 @@ const currentTimeIndicator = computed(() => {
 })
 
 const activeLesson = ref(null)
+const draggingLessonId = ref(null)
+const draggedLesson = ref(null)
+const dragPreviewDate = ref(null)
+const dragStarted = ref(false)
+const dragStartPoint = ref({ x: 0, y: 0 })
+const suppressNextLessonClick = ref(false)
+const dragError = ref('')
 
 const lessonsBySlot = computed(() => {
   const map = {}
@@ -569,7 +581,9 @@ const lessonsWithPositions = computed(() => {
   for (const lesson of props.lessons) {
     if (!lesson.id || !lesson.scheduled_at) continue
     
-    const dt = new Date(lesson.scheduled_at)
+    const dt = lesson.id === draggingLessonId.value && dragPreviewDate.value
+      ? new Date(dragPreviewDate.value)
+      : new Date(lesson.scheduled_at)
     const lessonIso = toISO(dt)
     
     // Находим индекс дня недели
@@ -626,6 +640,178 @@ const formatDateTime = (val) => {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+const toLocalDateTimeWithOffset = (date) => {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  const ss = String(date.getSeconds()).padStart(2, '0')
+  const timezoneOffset = -date.getTimezoneOffset()
+  const offsetHours = Math.floor(Math.abs(timezoneOffset) / 60)
+  const offsetMinutes = Math.abs(timezoneOffset) % 60
+  const offsetSign = timezoneOffset >= 0 ? '+' : '-'
+  const offsetStr = `${offsetSign}${String(offsetHours).padStart(2, '0')}:${String(offsetMinutes).padStart(2, '0')}`
+  return `${y}-${m}-${d}T${hh}:${mm}:${ss}${offsetStr}`
+}
+
+const canDragLesson = (lesson) => {
+  if (!canEditTime.value || !props.onUpdateLesson) {
+    return { ok: false, message: 'Перенос уроков доступен только менеджеру или администратору.' }
+  }
+
+  if (!lesson?.id || lesson.status !== 'PLANNED') {
+    return { ok: false, message: 'Переносить можно только запланированные уроки.' }
+  }
+
+  const scheduledAt = new Date(lesson.scheduled_at)
+  const nowDate = new Date()
+  const hourMs = 60 * 60 * 1000
+
+  if (scheduledAt.getTime() - nowDate.getTime() < hourMs) {
+    return { ok: false, message: 'До урока меньше часа. Его можно только отменить.' }
+  }
+
+  return { ok: true }
+}
+
+const getDateFromCalendarPoint = (event) => {
+  const body = calendarBodyRef.value
+  if (!body || !calendarBodyWidth.value || !weekDays.value.length) return null
+
+  const rect = body.getBoundingClientRect()
+  const x = event.clientX - rect.left
+  const y = event.clientY - rect.top + body.scrollTop
+  const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  const dayIndex = Math.floor((x - timeColWidth) / dayWidth)
+
+  if (dayIndex < 0 || dayIndex >= weekDays.value.length) return null
+
+  const minutesFromStart = Math.round((y / slotHeight) * 2) * 30
+  const clampedMinutes = Math.max(0, Math.min((24 * 60) - 30, minutesFromStart))
+  const target = new Date(weekDays.value[dayIndex].date)
+  target.setHours(0, clampedMinutes, 0, 0)
+
+  return target
+}
+
+const validateLessonDrop = (lesson, targetDate) => {
+  const base = canDragLesson(lesson)
+  if (!base.ok) return base
+
+  if (!targetDate) {
+    return { ok: false, message: 'Перетащите урок на ячейку текущей недели.' }
+  }
+
+  const originalDate = new Date(lesson.scheduled_at)
+  if (targetDate.getTime() <= originalDate.getTime()) {
+    return { ok: false, message: 'Урок можно переносить только вперед по времени.' }
+  }
+
+  const start = new Date(weekStart.value)
+  const end = addDays(start, 7)
+  if (targetDate < start || targetDate >= end) {
+    return { ok: false, message: 'Урок можно переносить только в пределах текущей недели.' }
+  }
+
+  return { ok: true }
+}
+
+const clearLessonDrag = () => {
+  draggingLessonId.value = null
+  draggedLesson.value = null
+  dragPreviewDate.value = null
+  dragStarted.value = false
+  window.removeEventListener('pointermove', handleLessonDragMove)
+  window.removeEventListener('pointerup', finishLessonDrag)
+  window.removeEventListener('pointercancel', cancelLessonDrag)
+}
+
+const cancelLessonDrag = () => {
+  clearLessonDrag()
+}
+
+const startLessonDrag = (event, lesson) => {
+  if (event.button !== undefined && event.button !== 0) return
+
+  dragError.value = ''
+  draggedLesson.value = lesson
+  draggingLessonId.value = null
+  dragPreviewDate.value = null
+  dragStarted.value = false
+  dragStartPoint.value = { x: event.clientX, y: event.clientY }
+
+  window.addEventListener('pointermove', handleLessonDragMove)
+  window.addEventListener('pointerup', finishLessonDrag)
+  window.addEventListener('pointercancel', cancelLessonDrag)
+}
+
+const handleLessonDragMove = (event) => {
+  if (!draggedLesson.value) return
+
+  const dx = Math.abs(event.clientX - dragStartPoint.value.x)
+  const dy = Math.abs(event.clientY - dragStartPoint.value.y)
+  if (!dragStarted.value && dx + dy < 6) return
+
+  if (!dragStarted.value) {
+    const availability = canDragLesson(draggedLesson.value)
+    if (!availability.ok) {
+      dragError.value = availability.message
+      suppressNextLessonClick.value = true
+      clearLessonDrag()
+      return
+    }
+
+    draggingLessonId.value = draggedLesson.value.id
+    dragStarted.value = true
+  }
+
+  suppressNextLessonClick.value = true
+
+  const targetDate = getDateFromCalendarPoint(event)
+  if (targetDate) {
+    dragPreviewDate.value = targetDate
+  }
+}
+
+const finishLessonDrag = async (event) => {
+  const lesson = draggedLesson.value
+  const wasDragging = dragStarted.value
+  const targetDate = wasDragging ? getDateFromCalendarPoint(event) : null
+
+  clearLessonDrag()
+
+  if (!lesson || !wasDragging) return
+
+  suppressNextLessonClick.value = true
+  const validation = validateLessonDrop(lesson, targetDate)
+  if (!validation.ok) {
+    dragError.value = validation.message
+    return
+  }
+
+  try {
+    dragError.value = ''
+    await props.onUpdateLesson(lesson.id, {
+      scheduled_at: toLocalDateTimeWithOffset(targetDate),
+    })
+  } catch (err) {
+    console.error('drag lesson update error:', err)
+    dragError.value = err?.response?.data?.detail || 'Не удалось перенести урок'
+  }
+}
+
+const handleLessonClick = (event, lesson) => {
+  if (suppressNextLessonClick.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    suppressNextLessonClick.value = false
+    return
+  }
+
+  selectLesson(lesson)
 }
 
 // =====================================
@@ -1880,7 +2066,7 @@ defineExpose({
   padding: 3px 5px;
   margin: 0;
   font-size: 12px;
-  cursor: pointer;
+  cursor: grab;
   transition: none;
   overflow: hidden;
   display: flex;
@@ -1891,10 +2077,17 @@ defineExpose({
   z-index: 3;
   isolation: isolate;
   box-sizing: border-box;
+  touch-action: none;
 }
 
 .lesson-card-positioned:hover {
   z-index: 100 !important;
+}
+
+.lesson-card-positioned--dragging {
+  cursor: grabbing;
+  opacity: 0.85;
+  z-index: 120 !important;
 }
 
 /* Применяем стили статусов к позиционированным карточкам */
