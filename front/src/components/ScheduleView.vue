@@ -1735,9 +1735,9 @@ defineExpose({
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 180px);
-  min-height: 600px;
-  max-height: calc(100vh - 180px);
+  height: 95vh;
+  min-height: 720px;
+  max-height: 95vh;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
@@ -2588,9 +2588,9 @@ defineExpose({
   }
 
   .calendar {
-    height: auto;
-    min-height: 500px;
-    max-height: 70vh;
+    height: 88vh;
+    min-height: 620px;
+    max-height: 88vh;
   }
 }
 
@@ -2634,8 +2634,9 @@ defineExpose({
   }
 
   .calendar {
-    min-height: 400px;
-    max-height: 60vh;
+    height: 82vh;
+    min-height: 520px;
+    max-height: 82vh;
     font-size: 11px;
     min-width: 520px;
   }
@@ -2735,8 +2736,9 @@ defineExpose({
   }
 
   .calendar {
-    min-height: 350px;
-    max-height: 55vh;
+    height: 78vh;
+    min-height: 480px;
+    max-height: 78vh;
     min-width: 500px;
   }
 
