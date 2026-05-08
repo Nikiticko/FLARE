@@ -63,6 +63,7 @@
               `lesson-card--${item.lesson.status?.toLowerCase() || 'planned'}`,
               {
                 'lesson-card--trial': item.lesson.is_trial,
+                'lesson-card-positioned--draggable': isLessonDraggable(item.lesson),
                 'lesson-card-positioned--dragging': item.lesson.id === draggingLessonId
               }
             ]"
@@ -677,6 +678,19 @@ const canDragLesson = (lesson) => {
   return { ok: true }
 }
 
+const isLessonDraggable = (lesson) => canDragLesson(lesson).ok
+
+const getLessonMoveRange = () => {
+  const start = new Date()
+  start.setHours(start.getHours() + 1)
+  start.setSeconds(0, 0)
+
+  const end = addDays(weekStart.value, 7)
+  end.setHours(0, 0, 0, 0)
+
+  return { start, end }
+}
+
 const getDateFromCalendarPoint = (event) => {
   const body = calendarBodyRef.value
   if (!body || !calendarBodyWidth.value || !weekDays.value.length) return null
@@ -705,15 +719,13 @@ const validateLessonDrop = (lesson, targetDate) => {
     return { ok: false, message: 'Перетащите урок на ячейку текущей недели.' }
   }
 
-  const originalDate = new Date(lesson.scheduled_at)
-  if (targetDate.getTime() <= originalDate.getTime()) {
-    return { ok: false, message: 'Урок можно переносить только вперед по времени.' }
+  const { start, end } = getLessonMoveRange()
+  if (targetDate < start) {
+    return { ok: false, message: 'Урок можно переносить только на время не раньше чем через час от текущего момента.' }
   }
 
-  const start = new Date(weekStart.value)
-  const end = addDays(start, 7)
-  if (targetDate < start || targetDate >= end) {
-    return { ok: false, message: 'Урок можно переносить только в пределах текущей недели.' }
+  if (targetDate >= end) {
+    return { ok: false, message: 'Урок можно переносить только до конца текущей недели.' }
   }
 
   return { ok: true }
@@ -2066,7 +2078,7 @@ defineExpose({
   padding: 3px 5px;
   margin: 0;
   font-size: 12px;
-  cursor: grab;
+  cursor: pointer;
   transition: none;
   overflow: hidden;
   display: flex;
@@ -2078,6 +2090,10 @@ defineExpose({
   isolation: isolate;
   box-sizing: border-box;
   touch-action: none;
+}
+
+.lesson-card-positioned--draggable {
+  cursor: grab;
 }
 
 .lesson-card-positioned:hover {
