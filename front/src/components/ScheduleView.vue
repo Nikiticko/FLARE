@@ -1,15 +1,31 @@
 <!-- src/components/ScheduleView.vue -->
 <template>
   <div class="schedule-view">
-    <!-- Панель управления неделей -->
+    <!-- Панель управления периодом -->
     <section class="admin-card controls-card">
       <div class="controls-row">
-        <button @click="shiftWeek(-1)">‹ Предыдущая неделя</button>
+        <button @click="shiftPeriod(-1)">‹ {{ previousPeriodLabel }}</button>
         <button @click="goToday">Сегодня</button>
-        <button @click="shiftWeek(1)">Следующая неделя ›</button>
+        <button @click="shiftPeriod(1)">{{ nextPeriodLabel }} ›</button>
+      </div>
+      <div class="view-toggle" role="group" aria-label="Вид календаря">
+        <button
+          type="button"
+          :class="{ 'view-toggle__button--active': calendarMode === 'week' }"
+          @click="setCalendarMode('week')"
+        >
+          Неделя
+        </button>
+        <button
+          type="button"
+          :class="{ 'view-toggle__button--active': calendarMode === 'day' }"
+          @click="setCalendarMode('day')"
+        >
+          День
+        </button>
       </div>
       <div class="week-label">
-        Неделя: {{ weekRangeLabel }}
+        {{ periodLabel }}
       </div>
       <p class="hint">
         Клик по пустой ячейке создаёт урок на выбранные дату и время.
@@ -23,7 +39,7 @@
         <div class="calendar-header-row">
           <div class="calendar-cell time-col"></div>
           <div
-            v-for="day in weekDays"
+            v-for="day in visibleDays"
             :key="day.iso"
             class="calendar-cell day-col"
           >
@@ -45,7 +61,7 @@
               {{ formatHour(hour) }}
             </div>
             <div
-              v-for="day in weekDays"
+              v-for="day in visibleDays"
               :key="day.iso + '-' + hour"
               class="calendar-cell slot"
               @click="handleSlotClick($event, day.iso, hour)"
@@ -455,6 +471,7 @@ function formatRu(date) {
 }
 
 const currentDate = ref(new Date())
+const calendarMode = ref('week')
 
 const weekStart = computed(() => startOfWeek(currentDate.value))
 
@@ -478,6 +495,61 @@ const weekRangeLabel = computed(() => {
   const end = addDays(start, 6)
   return `${formatRu(start)} — ${formatRu(end)}`
 })
+
+const currentDay = computed(() => {
+  const d = new Date(currentDate.value)
+  d.setHours(0, 0, 0, 0)
+  return d
+})
+
+const visibleDays = computed(() => {
+  if (calendarMode.value === 'day') {
+    const names = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']
+    const d = currentDay.value
+    return [{
+      date: d,
+      iso: toISO(d),
+      weekday: names[d.getDay()],
+      display: formatRu(d),
+    }]
+  }
+
+  return weekDays.value
+})
+
+const periodLabel = computed(() => {
+  if (calendarMode.value === 'day') {
+    return `День: ${formatRu(currentDay.value)}`
+  }
+
+  return `Неделя: ${weekRangeLabel.value}`
+})
+
+const previousPeriodLabel = computed(() => (
+  calendarMode.value === 'day' ? 'Предыдущий день' : 'Предыдущая неделя'
+))
+
+const nextPeriodLabel = computed(() => (
+  calendarMode.value === 'day' ? 'Следующий день' : 'Следующая неделя'
+))
+
+const visibleRange = computed(() => {
+  if (calendarMode.value === 'day') {
+    return {
+      date_from: toISO(currentDay.value),
+      date_to: toISO(currentDay.value)
+    }
+  }
+
+  return {
+    date_from: toISO(weekStart.value),
+    date_to: toISO(addDays(weekStart.value, 6))
+  }
+})
+
+const visibleDayCount = computed(() => visibleDays.value.length)
+const mobileCalendarMinWidth = computed(() => calendarMode.value === 'day' ? '0' : '520px')
+const smallCalendarMinWidth = computed(() => calendarMode.value === 'day' ? '0' : '500px')
 
 // =====================================
 // УРОКИ
@@ -504,11 +576,11 @@ const updateCalendarBodyWidth = () => {
 }
 
 const currentTimeIndicator = computed(() => {
-  if (!calendarBodyWidth.value || !weekDays.value.length) return null
+  if (!calendarBodyWidth.value || !visibleDays.value.length) return null
 
   const current = now.value
   const todayIso = toISO(current)
-  const dayIndex = weekDays.value.findIndex(day => day.iso === todayIso)
+  const dayIndex = visibleDays.value.findIndex(day => day.iso === todayIso)
   if (dayIndex < 0) return null
 
   const startHour = timeSlots[0]
@@ -519,7 +591,7 @@ const currentTimeIndicator = computed(() => {
   const minutesFromStart = totalMinutes - startHour * 60
   const top = (minutesFromStart / 60) * slotHeight
 
-  const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  const dayWidth = (calendarBodyWidth.value - timeColWidth) / visibleDays.value.length
   const left = timeColWidth + dayWidth * dayIndex
 
   const label = current.toLocaleTimeString('ru-RU', {
@@ -573,11 +645,11 @@ const lessonsBySlot = computed(() => {
 
 // Вычисляем позиции уроков с учетом минут для точного позиционирования
 const lessonsWithPositions = computed(() => {
-  if (!calendarBodyWidth.value || !weekDays.value.length) return []
+  if (!calendarBodyWidth.value || !visibleDays.value.length) return []
   
   const result = []
   const startHour = timeSlots[0]
-  const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  const dayWidth = (calendarBodyWidth.value - timeColWidth) / visibleDays.value.length
   const dayLessonsMap = new Map()
   
   for (const lesson of props.lessons) {
@@ -589,7 +661,7 @@ const lessonsWithPositions = computed(() => {
     const lessonIso = toISO(dt)
     
     // Находим индекс дня недели
-    const dayIndex = weekDays.value.findIndex(day => day.iso === lessonIso)
+    const dayIndex = visibleDays.value.findIndex(day => day.iso === lessonIso)
     if (dayIndex < 0) continue // Урок вне текущей недели
     
     const startMinutes = dt.getHours() * 60 + dt.getMinutes()
@@ -741,19 +813,19 @@ const getLessonMoveRange = () => {
 
 const getDateFromCalendarPoint = (event) => {
   const body = calendarBodyRef.value
-  if (!body || !calendarBodyWidth.value || !weekDays.value.length) return null
+  if (!body || !calendarBodyWidth.value || !visibleDays.value.length) return null
 
   const rect = body.getBoundingClientRect()
   const x = event.clientX - rect.left
   const y = event.clientY - rect.top + body.scrollTop
-  const dayWidth = (calendarBodyWidth.value - timeColWidth) / 7
+  const dayWidth = (calendarBodyWidth.value - timeColWidth) / visibleDays.value.length
   const dayIndex = Math.floor((x - timeColWidth) / dayWidth)
 
-  if (dayIndex < 0 || dayIndex >= weekDays.value.length) return null
+  if (dayIndex < 0 || dayIndex >= visibleDays.value.length) return null
 
   const minutesFromStart = Math.round((y / slotHeight) * 2) * 30
   const clampedMinutes = Math.max(0, Math.min((24 * 60) - 30, minutesFromStart))
-  const target = new Date(weekDays.value[dayIndex].date)
+  const target = new Date(visibleDays.value[dayIndex].date)
   target.setHours(0, clampedMinutes, 0, 0)
 
   return target
@@ -1642,29 +1714,30 @@ const handleUpdate = async () => {
 // НАВИГАЦИЯ НЕДЕЛИ
 // =====================================
 
-const shiftWeek = (delta) => {
+const shiftPeriod = (delta) => {
   const d = new Date(currentDate.value)
-  d.setDate(d.getDate() + delta * 7)
+  d.setDate(d.getDate() + delta * (calendarMode.value === 'day' ? 1 : 7))
   currentDate.value = d
-  emit('week-changed', {
-    date_from: toISO(weekStart.value),
-    date_to: toISO(addDays(weekStart.value, 6))
-  })
+  emit('week-changed', visibleRange.value)
 }
 
 const goToday = () => {
   currentDate.value = new Date()
-  emit('week-changed', {
-    date_from: toISO(weekStart.value),
-    date_to: toISO(addDays(weekStart.value, 6))
-  })
+  emit('week-changed', visibleRange.value)
+}
+
+const setCalendarMode = (mode) => {
+  if (calendarMode.value === mode) return
+  calendarMode.value = mode
+  emit('week-changed', visibleRange.value)
 }
 
 // Экспортируем функции для внешнего использования
 defineExpose({
   weekStart,
   weekEnd: computed(() => addDays(weekStart.value, 6)),
-  shiftWeek,
+  shiftWeek: (delta) => shiftPeriod(delta),
+  shiftPeriod,
   goToday
 })
 </script>
@@ -1736,6 +1809,30 @@ defineExpose({
   margin: 0;
 }
 
+.view-toggle {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid rgba(255, 215, 0, 0.35);
+  border-radius: 8px;
+}
+
+.view-toggle button {
+  padding: 6px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #FFD700;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.view-toggle__button--active {
+  background: #FFD700 !important;
+  color: #1A1A1A !important;
+}
+
 .controls-row button {
   margin-right: 0;
   padding: 8px 16px;
@@ -1791,7 +1888,7 @@ defineExpose({
 
 .calendar-header-row {
   display: grid;
-  grid-template-columns: 45px repeat(7, 1fr);
+  grid-template-columns: 45px repeat(v-bind(visibleDayCount), 1fr);
   width: 100%;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -1800,7 +1897,7 @@ defineExpose({
 
 .calendar-row {
   display: grid;
-  grid-template-columns: 45px repeat(7, 1fr);
+  grid-template-columns: 45px repeat(v-bind(visibleDayCount), 1fr);
   width: 100%;
   box-sizing: border-box;
 }
@@ -2686,12 +2783,12 @@ defineExpose({
     min-height: 520px;
     max-height: 82vh;
     font-size: 11px;
-    min-width: 520px;
+    min-width: v-bind(mobileCalendarMinWidth);
   }
 
   .calendar-header-row,
   .calendar-row {
-    grid-template-columns: 45px repeat(7, minmax(64px, 1fr));
+    grid-template-columns: 45px repeat(v-bind(visibleDayCount), minmax(64px, 1fr));
   }
 
   .time-col {
@@ -2787,12 +2884,12 @@ defineExpose({
     height: 78vh;
     min-height: 480px;
     max-height: 78vh;
-    min-width: 500px;
+    min-width: v-bind(smallCalendarMinWidth);
   }
 
   .calendar-header-row,
   .calendar-row {
-    grid-template-columns: 45px repeat(7, minmax(58px, 1fr));
+    grid-template-columns: 45px repeat(v-bind(visibleDayCount), minmax(58px, 1fr));
   }
 
   .time-col {
