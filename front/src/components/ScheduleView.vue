@@ -1656,6 +1656,8 @@ defineExpose({
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
+  overflow-x: auto;
+  overflow-y: visible;
 }
 
 .calendar-wrapper .status-text,
@@ -2634,22 +2636,19 @@ defineExpose({
   .calendar {
     min-height: 400px;
     max-height: 60vh;
-  }
-
-  .calendar {
     font-size: 11px;
+    min-width: 520px;
   }
 
   .calendar-header-row,
   .calendar-row {
-    grid-template-columns: 35px repeat(7, minmax(60px, 1fr));
+    grid-template-columns: 45px repeat(7, minmax(64px, 1fr));
   }
 
   .time-col {
     font-size: 9px;
     padding-right: 4px;
     padding-left: 2px;
-    height: 36px;
   }
 
   .day-col {
@@ -2662,14 +2661,6 @@ defineExpose({
 
   .day-date {
     font-size: 14px;
-  }
-
-  .calendar-row {
-    height: 36px;
-  }
-
-  .slot {
-    height: 36px;
   }
 
   .lesson-card {
@@ -2746,16 +2737,16 @@ defineExpose({
   .calendar {
     min-height: 350px;
     max-height: 55vh;
+    min-width: 500px;
   }
 
   .calendar-header-row,
   .calendar-row {
-    grid-template-columns: 30px repeat(7, minmax(50px, 1fr));
+    grid-template-columns: 45px repeat(7, minmax(58px, 1fr));
   }
 
   .time-col {
     font-size: 8px;
-    height: 32px;
   }
 
   .day-col {
@@ -2768,14 +2759,6 @@ defineExpose({
 
   .day-date {
     font-size: 12px;
-  }
-
-  .calendar-row {
-    height: 32px;
-  }
-
-  .slot {
-    height: 32px;
   }
 
   .lesson-card {
