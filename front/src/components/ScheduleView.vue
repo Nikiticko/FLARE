@@ -1635,6 +1635,13 @@ defineExpose({
   min-height: 100%;
 }
 
+.controls-card,
+.calendar-wrapper,
+.calendar {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .admin-card {
   background: rgba(40, 40, 40, 0.8);
   border: 3px solid #FFD700;
